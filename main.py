@@ -2,9 +2,11 @@ import pygetwindow as gw
 import threading
 import time
 import sys
-from PySide2.QtWidgets import QApplication, QMainWindow
+from PySide2.QtWidgets import QApplication, QMainWindow,QSystemTrayIcon
 from ui_mainWindow import Ui_MainWindow
 from PySide2.QtWidgets import *
+from PySide2.QtGui import QIcon
+from PySide2.QtCore import QEvent
 import mytools
 
 # 该变量用来通知结束线程
@@ -57,6 +59,12 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.setupUi(self)
         # 重写窗口
         self.init_Window()
+
+        self.tray_icon = QSystemTrayIcon(QIcon("icon.ico"),self)
+        # 在系统托盘中显示图标
+        self.tray_icon.show()
+        self.tray_icon.activated.connect(self.on_tray_icon_activated)
+        
         
         # 启动监控线程
         self.thread = threading.Thread(target=window_monitor, args=(self.tableWidget,))
@@ -77,6 +85,17 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.tableWidget.setColumnWidth(0, 100)  # 第1列宽度
         self.tableWidget.setColumnWidth(1, 460)  # 第2列宽度
         self.tableWidget.setColumnWidth(2, 200)  # 第3列宽度
+    
+    # 拦截最小化
+    def changeEvent(self, event):
+        if event.type() == QEvent.WindowStateChange:
+            if self.isMinimized():
+                self.hide()
+    # 单击托盘图标恢复显示
+    def on_tray_icon_activated(self, reason):
+        if reason == QSystemTrayIcon.Trigger:  # 单击托盘图标
+            self.showNormal()
+            self.activateWindow()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
