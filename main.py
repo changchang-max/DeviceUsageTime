@@ -5,9 +5,11 @@ import sys
 from PySide2.QtWidgets import QApplication, QMainWindow,QSystemTrayIcon
 from ui_mainWindow import Ui_MainWindow
 from PySide2.QtWidgets import *
-from PySide2.QtGui import QIcon
+from PySide2.QtGui import QIcon,QPixmap
 from PySide2.QtCore import QEvent
 import mytools
+import imgaes
+import base64
 
 # 该变量用来通知结束线程
 stop_event = threading.Event()
@@ -32,6 +34,7 @@ def is_exist(tabelWidget: QTableWidget, column: int, value) -> bool:
             return table_row
     return False
 
+# (QTableWidget对象,标题列表)向表中添加行
 def add_row(tabelWidget: QTableWidget, title_list: list):
     for title in title_list:
         # 先判断表里有没有，有则更改其值，没有则添加新行
@@ -51,6 +54,14 @@ def add_row(tabelWidget: QTableWidget, title_list: list):
             tabelWidget.setItem(row, 1, QTableWidgetItem(title))  # title
             tabelWidget.setItem(row, 2, QTableWidgetItem(mytools.get_strtime(tabel_default_time)))  # time
 
+# 将base64字符串转成QPixmap(相当于图片文件了)
+def to_image(base64_str:str):
+    # 将base64转成QPixmap
+    image_data = base64.b64decode(base64_str)
+    pixmap = QPixmap()
+    pixmap.loadFromData(image_data)
+    return pixmap
+
 # 主窗口类
 class MyMainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
@@ -60,7 +71,8 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         # 重写窗口
         self.init_Window()
 
-        self.tray_icon = QSystemTrayIcon(QIcon("icon.ico"),self)
+        self.tray_icon = QSystemTrayIcon(QIcon(to_image(imgaes.images["icon"])),self)
+        # todo:当仅打开exe文件时，会因为没有ico图标而无法做到托盘显示
         # 在系统托盘中显示图标
         self.tray_icon.show()
         self.tray_icon.activated.connect(self.on_tray_icon_activated)
@@ -100,6 +112,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MyMainWindow()
+    window.setWindowIcon(QIcon(to_image(imgaes.images["icon"])))
     window.setWindowTitle("屏幕视奸器")
     window.show()
 
