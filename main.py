@@ -97,10 +97,12 @@ def save_data(data:dict):
         with open(file_name, "w", encoding="utf-8") as file:
             json.dump(data, file, ensure_ascii=False, indent=4)
 
+# 自动保存线程函数
 def auto_save_thread(all_applications_dict: dict):
     while not stop_event.is_set():
         time.sleep(60)  # 每60秒保存一次
         save_data(all_applications_dict)
+
 
 # 主窗口类
 class MyMainWindow(QMainWindow, Ui_MainWindow):
@@ -120,6 +122,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         
         # 定义存储所有应用使用时长的字典
         self.all_applications_dict = {}
+        self.init_data()  # 初始化数据
 
 
         # 启动监控线程
@@ -148,6 +151,19 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.tableWidget.setColumnWidth(0, 100)  # 第1列宽度
         self.tableWidget.setColumnWidth(1, 460)  # 第2列宽度
         self.tableWidget.setColumnWidth(2, 200)  # 第3列宽度
+    
+    # 初始化数据，若存在当天数据则读取，而不是从空开始
+    def init_data(self):
+        date_str = time.strftime("%Y-%m-%d", time.localtime()) # 获取当前日期字符串
+        file_name = f"./history_data/data_{date_str}.json"
+        p = pathlib.Path(file_name)
+        if p.exists() and p.is_file():
+            # 读取json文件
+            with open(file_name, "r", encoding="utf-8") as file:
+                self.all_applications_dict = json.load(file)
+        else:
+            # 不存在则初始化为空字典
+            self.all_applications_dict = {}
     
     # 拦截最小化
     def changeEvent(self, event):
