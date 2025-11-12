@@ -2,8 +2,10 @@
 import smtplib
 from email.mime.text import MIMEText
 import random
-from datetime import datetime
 import time
+import winreg
+import sys
+import pathlib
 
 # 提前定义一些日志标志，方便打印
 info_error = "[ERROR]"
@@ -83,7 +85,7 @@ def get_strtime(second:int) -> str:
     return time.strftime("%H:%M:%S",time.gmtime(second))
 
 # 可传入完整的时间字符串或时分秒，返回加上second秒后的时间字符串
-def add_str_time(str_time:str,second:int):
+def add_str_time(str_time:str,second:int) -> str:
     # 可能传入完整的时间字符串或仅时分秒
     try:
         # 尝试解析完整的时间字符串
@@ -102,7 +104,47 @@ def add_str_time(str_time:str,second:int):
     # 测试代码：print(add_str_time("2011-09-11 08:40:22",3600000))
     # 测试代码：print(add_str_time("08:40:22",10))
 
+# 获取当前文件的绝对路径，兼容打包和源码运行
+def resource_path() -> str:
+    """获取资源文件的绝对路径，兼容打包和源码运行"""
+    
+    if getattr(sys, 'frozen', False):
+        # 被 PyInstaller 打包后的 exe 文件
+        current_file = pathlib.Path(sys.executable)
+    else:
+        # 普通 Python 源码运行时
+        current_file = pathlib.Path(__file__)
+    return str(current_file)
+    # print("当前文件名：", current_file.name)
+    # print("当前完整路径：", current_file)
 
+# 将自身设置开机自启动,参数传要写入注册表的键名
+def set_startup(app_name:str):
+    # 获取当前文件的真是路径
+    p = pathlib.Path(resource_path())
+    key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+    
+    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,key_path,0,winreg.KEY_SET_VALUE)
+    winreg.SetValueEx(key,app_name,0,winreg.REG_SZ,f'"{str(p)}"')
+    
+    # 关闭句柄
+    winreg.CloseKey(key)
+
+# 将自身取消开机自启动,参数传要删除的注册表的键名
+def unset_startup(app_name:str):
+    
+    key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+    
+    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,key_path,0,winreg.KEY_SET_VALUE)
+    try:
+        winreg.DeleteValue(key,app_name)
+    except FileNotFoundError:
+        pass
+    except:
+        with open("error_log.txt","a",encoding="utf-8") as f:
+            f.write("取消开机自启动时出现未知错误\n")
+    # 关闭句柄
+    winreg.CloseKey(key)
 
 if __name__ == "__main__":
     if not get_fileExtensionName("aaa"):

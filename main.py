@@ -4,6 +4,7 @@ import time
 import sys
 from PySide2.QtWidgets import QApplication, QMainWindow,QSystemTrayIcon
 from ui_mainWindow import Ui_MainWindow
+from ui_settings import Ui_Settings
 from PySide2.QtWidgets import *
 from PySide2.QtGui import QIcon,QPixmap
 from PySide2.QtCore import QEvent
@@ -13,6 +14,7 @@ import base64
 import json
 import pathlib
 import os
+import winreg
 
 # 该变量用来通知结束线程
 stop_event = threading.Event()
@@ -103,18 +105,35 @@ def auto_save_thread(all_applications_dict: dict):
         time.sleep(60)  # 每60秒保存一次
         save_data(all_applications_dict)
 
+# 定义“功能”类
+class Functions:
+    def __init__(self):
+        self.app_name = "DeviceUsageTime"
+        self.app_path = mytools.resource_path()
+
+    def set_startup(self):
+        # 设置开机自启动
+        mytools.set_startup(self.app_name)
+
+    def unset_startup(self):
+        # 取消开机自启动
+        mytools.unset_startup(self.app_name)
+        
 
 # 主窗口类
 class MyMainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
-        
+
         self.setupUi(self)
         # 重写窗口
         self.init_Window()
 
+        # 新建功能类对象
+        self.functions = Functions()
+
         self.tray_icon = QSystemTrayIcon(QIcon(to_image(imgaes.images["icon"])),self)
-        # todo:当仅打开exe文件时，会因为没有ico图标而无法做到托盘显示
+
         # 在系统托盘中显示图标
         self.tray_icon.show()
         self.tray_icon.activated.connect(self.on_tray_icon_activated)
@@ -135,6 +154,19 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.thread_auto_save.start()
 
 
+        # 为“设置”菜单添加点击动作
+        self.action_settings = QAction("打开设置",self)
+        self.menu_2.addAction(self.action_settings) # 添加下拉选项
+        
+        self.action_settings.triggered.connect(self.open_settings_window)
+
+        # 提前创建Settings窗口实例
+        self.settings_window = QMainWindow()
+        self.settings_ui = Ui_Settings()
+        self.settings_ui.setupUi(self.settings_window)
+        self.settings_window.setWindowTitle("设置")
+
+
     # 重写父类捕获退出的方法
     def closeEvent(self, event):
         # 通知线程停止
@@ -151,6 +183,11 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.tableWidget.setColumnWidth(0, 100)  # 第1列宽度
         self.tableWidget.setColumnWidth(1, 460)  # 第2列宽度
         self.tableWidget.setColumnWidth(2, 200)  # 第3列宽度
+    
+    # 初始化“设置”窗口
+    def init_Settings_Window(self):
+        # 连接“开机自启动”复选框与对应的动作
+        self.settings_ui.checkBox.stateChanged.connect(self.on_checkBox_stateChanged)
     
     # 初始化数据，若存在当天数据则读取，而不是从空开始
     def init_data(self):
@@ -175,10 +212,27 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         if reason == QSystemTrayIcon.Trigger:  # 单击托盘图标
             self.showNormal()
             self.activateWindow()
+    
+    # 动作：打开“设置”窗口
+    def open_settings_window(self):
+        # 启动前执行初始化函数（因为是自己定义的，写在ui_settings.py里容易丢失）
+        self.init_Settings_Window()
+        self.settings_window.show()
+        
+
+    def on_checkBox_stateChanged(self, state):
+        # 2是选中，0是未选中，1是部分选中（该复选框不存在此数值）
+        if state == 2:
+            # 选中“开机自启动”
+            self.functions.set_startup()
+        else:
+            # 未选中“开机自启动”
+            self.functions.unset_startup()
+
 
 if __name__ == "__main__":
     # 切换工作目录为当前文件所在目录(以便正确创建文件夹)
-    file_path = pathlib.Path(__file__).parent
+    file_path = pathlib.Path(mytools.resource_path()).parent
     os.chdir(file_path)
 
     # 主线程是主窗口，其下有子线程刷新活动状态
