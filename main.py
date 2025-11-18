@@ -7,7 +7,7 @@ from ui_mainWindow import Ui_MainWindow
 from ui_settings import Ui_Settings
 from PySide2.QtWidgets import *
 from PySide2.QtGui import QIcon,QPixmap
-from PySide2.QtCore import QEvent
+from PySide2.QtCore import QEvent,Qt
 import mytools
 import imgaes
 import base64
@@ -61,8 +61,10 @@ def add_row(tabelWidget: QTableWidget, all_applications_dict: dict):
         # 先判断表里有没有，有则更改其值，没有则添加新行
         tabel_row = is_exist(tabelWidget, 1, title)
         if tabel_row is not False:
-            # tabel_time:str = tabelWidget.item(tabel_row, 2).text()  # 从窗口中获取当前time值
-            tabelWidget.setItem(tabel_row, 2, QTableWidgetItem(mytools.get_strtime(all_applications_dict[title])))
+            # time已经在字典里更新好了，可以直接用字典的内容覆盖上去
+            Item_new_time = QTableWidgetItem(mytools.get_strtime(all_applications_dict[title]))
+            Item_new_time.setTextAlignment(Qt.AlignCenter) # 为新的值也设置文本居中
+            tabelWidget.setItem(tabel_row, 2, Item_new_time)
         else:
             # 在末尾添加新行
             row = tabelWidget.rowCount()  # 得到当前行数
@@ -70,10 +72,20 @@ def add_row(tabelWidget: QTableWidget, all_applications_dict: dict):
 
             table_id = row + 1  # 定义id的值
             tabel_default_time = all_applications_dict[title]  # 定义新建时的time值
+            
+            
+            # 设置每个格子的内容
+            Item_id = QTableWidgetItem(str(table_id))
+            Item_title = QTableWidgetItem(title)
+            Item_time = QTableWidgetItem(mytools.get_strtime(tabel_default_time))
+            # 设置格子文本居中显示
+            Item_id.setTextAlignment(Qt.AlignCenter)
+            Item_time.setTextAlignment(Qt.AlignCenter)
 
-            tabelWidget.setItem(row, 0, QTableWidgetItem(str(table_id)))  # id
-            tabelWidget.setItem(row, 1, QTableWidgetItem(title))  # title
-            tabelWidget.setItem(row, 2, QTableWidgetItem(mytools.get_strtime(tabel_default_time)))  # time
+
+            tabelWidget.setItem(row, 0, Item_id)  # id
+            tabelWidget.setItem(row, 1, Item_title)  # title
+            tabelWidget.setItem(row, 2, Item_time)  # time
 
 # 将base64字符串转成QPixmap(相当于图片文件了)
 def to_image(base64_str:str):
@@ -182,7 +194,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         # 设置列宽（单位：像素）
         self.tableWidget.setColumnWidth(0, 100)  # 第1列宽度
         self.tableWidget.setColumnWidth(1, 460)  # 第2列宽度
-        self.tableWidget.setColumnWidth(2, 200)  # 第3列宽度
+        self.tableWidget.setColumnWidth(2, 170)  # 第3列宽度
     
     # 初始化“设置”窗口
     def init_Settings_Window(self):

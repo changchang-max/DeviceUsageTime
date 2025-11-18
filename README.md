@@ -40,3 +40,8 @@ python main.py
 - [x] 增加开机自启动选项
 - [ ] 增加显示过往数据功能
 - [ ] 增加按软件使用时长排序功能
+
+# 给我提建议/bug
+e-mail:primordial@qq.com
+# 我的博客（有很多笔记和配置攻略~）
+[传送门](http://primordialblog.publicnote.top/)
