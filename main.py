@@ -14,20 +14,34 @@ import base64
 import json
 import pathlib
 import os
-import winreg
+
 
 # 该变量用来通知结束线程
 stop_event = threading.Event()
 # 定义线程锁，同时只能执行更新字典与保存字典的一个操作
 thread_lock = threading.Lock()
+# 存储当天时间
+current_date = time.strftime("%Y-%m-%d")
 
 # 每秒获取所有窗口活动状态
-def window_monitor(tabelWidget: QTableWidget,all_applications_dict:dict):
+def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict):
     # getall，其子元素若dict里有，则吧dict的数值+1。若没有，则新增，数值默认为1
-
+    global current_date
     while not stop_event.is_set():
+        # 判断是否为新的日期
+        new_date = time.strftime("%Y-%m-%d", time.localtime())
+        if new_date != current_date:
+            # 跨天
+            with thread_lock:
+                all_applications_dict.clear()#清空字典
+                tableWidget.setRowCount(0)
+                current_date = new_date
+
+
+
         # 加上线程锁防止资源竞争
         with thread_lock:
+
             # 过滤掉空标题的窗口
             for t in gw.getAllTitles():
                 if t and t in all_applications_dict:
@@ -42,33 +56,33 @@ def window_monitor(tabelWidget: QTableWidget,all_applications_dict:dict):
 
 
         # 调用关键函数
-        add_row(tabelWidget, all_applications_dict)
+        add_row(tableWidget, all_applications_dict)
         time.sleep(1) #每隔一秒捕获一次
 
 # (QTableWidget对象,指定列,指定值)判断表的指定列是否存在指定值，存在则返回row_index
-def is_exist(tabelWidget: QTableWidget, column: int, value) -> bool:
-    row = tabelWidget.rowCount()
+def is_exist(tableWidget: QTableWidget, column: int, value) -> bool:
+    row = tableWidget.rowCount()
     for table_row in range(0, row):
-        column_text = tabelWidget.item(table_row, column).text()
+        column_text = tableWidget.item(table_row, column).text()
         if value == column_text:
             return table_row
     return False
 
 # (QTableWidget对象,标题列表)向表中添加行
-def add_row(tabelWidget: QTableWidget, all_applications_dict: dict):
+def add_row(tableWidget: QTableWidget, all_applications_dict: dict):
     title_list = all_applications_dict.keys()
     for title in title_list:
         # 先判断表里有没有，有则更改其值，没有则添加新行
-        tabel_row = is_exist(tabelWidget, 1, title)
+        tabel_row = is_exist(tableWidget, 1, title)
         if tabel_row is not False:
             # time已经在字典里更新好了，可以直接用字典的内容覆盖上去
             Item_new_time = QTableWidgetItem(mytools.get_strtime(all_applications_dict[title]))
             Item_new_time.setTextAlignment(Qt.AlignCenter) # 为新的值也设置文本居中
-            tabelWidget.setItem(tabel_row, 2, Item_new_time)
+            tableWidget.setItem(tabel_row, 2, Item_new_time)
         else:
             # 在末尾添加新行
-            row = tabelWidget.rowCount()  # 得到当前行数
-            tabelWidget.insertRow(row)
+            row = tableWidget.rowCount()  # 得到当前行数
+            tableWidget.insertRow(row)
 
             table_id = row + 1  # 定义id的值
             tabel_default_time = all_applications_dict[title]  # 定义新建时的time值
@@ -83,9 +97,9 @@ def add_row(tabelWidget: QTableWidget, all_applications_dict: dict):
             Item_time.setTextAlignment(Qt.AlignCenter)
 
 
-            tabelWidget.setItem(row, 0, Item_id)  # id
-            tabelWidget.setItem(row, 1, Item_title)  # title
-            tabelWidget.setItem(row, 2, Item_time)  # time
+            tableWidget.setItem(row, 0, Item_id)  # id
+            tableWidget.setItem(row, 1, Item_title)  # title
+            tableWidget.setItem(row, 2, Item_time)  # time
 
 # 将base64字符串转成QPixmap(相当于图片文件了)
 def to_image(base64_str:str):
@@ -97,18 +111,18 @@ def to_image(base64_str:str):
 
 # 将数据保存为json文件到本地，以日期命名
 def save_data(data:dict):
+    global current_date
     p = pathlib.Path("./history_data")
-    # 若文件夹不存在则创建
+    # 若文件夹不存在则创建。2025/12/8补丁：若当前日期文件夹不存在在创建时清空字典。防止过了零点后数据没有清空导致逻辑bug
     if p.exists() is False or p.is_dir() is False:
         p.mkdir()
 
-    date_str = time.strftime("%Y-%m-%d", time.localtime()) # 获取当前日期字符串
     # 覆盖写入
-    file_name = f"./history_data/data_{date_str}.json"
-    
+    file_name = pathlib.Path(f"./history_data/data_{current_date}.json")
+
     # 加上线程锁防止竞争
     with thread_lock:
-        with open(file_name, "w", encoding="utf-8") as file:
+        with open(str(file_name), "w", encoding="utf-8") as file:
             json.dump(data, file, ensure_ascii=False, indent=4)
 
 # 自动保存线程函数
@@ -143,7 +157,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
         # 新建功能类对象
         self.functions = Functions()
-
+        
         self.tray_icon = QSystemTrayIcon(QIcon(to_image(imgaes.images["icon"])),self)
 
         # 在系统托盘中显示图标
@@ -161,7 +175,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.thread_windows_listening.daemon = True  # 主线程退出时自动结束
         self.thread_windows_listening.start()
         # 启动自动保存json文件线程
-        self.thread_auto_save = threading.Thread(target=auto_save_thread, args=(self.all_applications_dict,))
+        self.thread_auto_save = threading.Thread(target=auto_save_thread, args=(self.all_applications_dict))
         self.thread_auto_save.daemon = True  # 主线程退出时自动结束
         self.thread_auto_save.start()
 
@@ -194,7 +208,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         # 设置列宽（单位：像素）
         self.tableWidget.setColumnWidth(0, 100)  # 第1列宽度
         self.tableWidget.setColumnWidth(1, 460)  # 第2列宽度
-        self.tableWidget.setColumnWidth(2, 170)  # 第3列宽度
+        self.tableWidget.setColumnWidth(2, 160)  # 第3列宽度
     
     # 初始化“设置”窗口
     def init_Settings_Window(self):
