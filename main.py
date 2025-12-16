@@ -16,13 +16,6 @@ import pathlib
 import os
 
 
-# 该变量用来通知结束线程
-stop_event = threading.Event()
-# 定义线程锁，同时只能执行更新字典与保存字典的一个操作
-thread_lock = threading.Lock()
-# 存储当天时间
-current_date = time.strftime("%Y-%m-%d")
-
 # 每秒获取所有窗口活动状态
 def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict):
     # getall，其子元素若dict里有，则吧dict的数值+1。若没有，则新增，数值默认为1
@@ -257,6 +250,15 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
 
 if __name__ == "__main__":
+    # 该变量用来通知结束线程
+    stop_event = threading.Event()
+    # 定义线程锁，同时只能执行更新字典与保存字典的一个操作
+    thread_lock = threading.Lock()
+    # 存储当天时间
+    current_date = time.strftime("%Y-%m-%d")
+
+
+
     # 切换工作目录为当前文件所在目录(以便正确创建文件夹)
     file_path = pathlib.Path(mytools.resource_path()).parent
     os.chdir(file_path)
