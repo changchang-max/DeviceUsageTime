@@ -144,6 +144,12 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
 
+        # 把存储当前时间放到这里，防止打包后的获取当天时间出现问题
+        global current_date
+        # 存储当天时间
+        current_date = time.strftime("%Y-%m-%d")
+
+
         self.setupUi(self)
         # 重写窗口
         self.init_Window()
@@ -168,7 +174,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.thread_windows_listening.daemon = True  # 主线程退出时自动结束
         self.thread_windows_listening.start()
         # 启动自动保存json文件线程
-        self.thread_auto_save = threading.Thread(target=auto_save_thread, args=(self.all_applications_dict))
+        self.thread_auto_save = threading.Thread(target=auto_save_thread, args=(self.all_applications_dict,))
         self.thread_auto_save.daemon = True  # 主线程退出时自动结束
         self.thread_auto_save.start()
 
@@ -254,9 +260,7 @@ if __name__ == "__main__":
     stop_event = threading.Event()
     # 定义线程锁，同时只能执行更新字典与保存字典的一个操作
     thread_lock = threading.Lock()
-    # 存储当天时间
-    current_date = time.strftime("%Y-%m-%d")
-
+    
 
 
     # 切换工作目录为当前文件所在目录(以便正确创建文件夹)
