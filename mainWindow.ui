@@ -60,8 +60,12 @@
    </property>
    <widget class="QMenu" name="menu">
     <property name="title">
-     <string>预留选项</string>
+     <string>排序</string>
     </property>
+    <addaction name="action"/>
+    <addaction name="action_2"/>
+    <addaction name="action_3"/>
+    <addaction name="action_4"/>
    </widget>
    <widget class="QMenu" name="menu_2">
     <property name="title">
@@ -71,6 +75,26 @@
    <addaction name="menu"/>
    <addaction name="menu_2"/>
   </widget>
+  <action name="action">
+   <property name="text">
+    <string>从高到低（名称）</string>
+   </property>
+  </action>
+  <action name="action_2">
+   <property name="text">
+    <string>从低到高（名称）</string>
+   </property>
+  </action>
+  <action name="action_3">
+   <property name="text">
+    <string>从高到低（时长）</string>
+   </property>
+  </action>
+  <action name="action_4">
+   <property name="text">
+    <string>从低到高（时长）</string>
+   </property>
+  </action>
  </widget>
  <resources/>
  <connections/>

@@ -27,9 +27,8 @@ def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict):
             # 跨天
             with thread_lock:
                 all_applications_dict.clear()#清空字典
-                tableWidget.setRowCount(0)
+                tableWidget.setRowCount(0)#清空表单
                 current_date = new_date
-
 
 
         # 加上线程锁防止资源竞争
@@ -46,8 +45,12 @@ def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict):
                 else:
                     # 标题为空的窗口，忽略
                     pass
-
-
+        
+        # 每次循环都对字典进行排序(应该用clear与update把操作同步给原字典，而不只是局部变量)
+        new_applications_dict = Sort(all_applications_dict).sort(sort_type)
+        all_applications_dict.clear()
+        all_applications_dict.update(new_applications_dict)
+        
         # 调用关键函数
         add_row(tableWidget, all_applications_dict)
         time.sleep(1) #每隔一秒捕获一次
@@ -137,19 +140,53 @@ class Functions:
     def unset_startup(self):
         # 取消开机自启动
         mytools.unset_startup(self.app_name)
-        
+
+# 给字典排序类
+class Sort:
+    def __init__(self,all_applications_dict:dict):
+        # 预设有四种模式（下面这四个函数）
+        self.all_applications_dict = all_applications_dict
+
+    def sort(self,type:str):
+        match type:
+            case "windowName_up":
+                return self.windowName_up()
+            case "windowName_down":
+                return self.windowName_down()
+            case "useTime_up":
+                return self.useTime_up()
+            case "useTime_down":
+                return self.useTime_down()
+            case _ :
+                print("预期外的值")
+
+    # 按名字升序
+    def windowName_up(self)->dict:
+        return {k:self.all_applications_dict[k] for k in sorted(self.all_applications_dict.keys())}
+    # 按名字降序
+    def windowName_down(self)->dict:
+        return {k:self.all_applications_dict[k] for k in sorted(self.all_applications_dict.keys(),reverse=True)}
+    # 按值升序
+    def useTime_up(self)->dict:
+        return {k:v for k,v in sorted(self.all_applications_dict.items(),key=lambda x: x[1])}
+    # 按值降序
+    def useTime_down(self)->dict:
+        return {k:v for k,v in sorted(self.all_applications_dict.items(),key=lambda x: x[1],reverse=True)}        
 
 # 主窗口类
 class MyMainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
-
+        """数据初始化区"""
         # 把存储当前时间放到这里，防止打包后的获取当天时间出现问题
-        global current_date
+        global current_date,sort_type
         # 存储当天时间
         current_date = time.strftime("%Y-%m-%d")
+        # 定义默认排序方式
+        sort_type = "windowName_up"
 
 
+        """窗口初始化区"""
         self.setupUi(self)
         # 重写窗口
         self.init_Window()
@@ -180,10 +217,23 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
 
         # 为“设置”菜单添加点击动作
-        self.action_settings = QAction("打开设置",self)
-        self.menu_2.addAction(self.action_settings) # 添加下拉选项
-        
+        # self.action_settings = QAction("打开设置",self)
+        # self.menu_2.addAction(self.action_settings) # 添加下拉选项
+        self.action_settings = self.action_5
         self.action_settings.triggered.connect(self.open_settings_window)
+
+        # 为“排序”菜单添加点击动作
+        self.action_windowName_up = self.action
+        self.action_windowName_down = self.action_2
+        self.action_useTime_up = self.action_3
+        self.action_useTime_down = self.action_4
+
+        self.action_windowName_up.triggered.connect(lambda: self.sort_change("windowName_up"))
+        self.action_windowName_down.triggered.connect(lambda: self.sort_change("windowName_down"))
+        self.action_useTime_up.triggered.connect(lambda: self.sort_change("useTime_up"))
+        self.action_useTime_down.triggered.connect(lambda: self.sort_change("useTime_down"))
+        
+
 
         # 提前创建Settings窗口实例
         self.settings_window = QMainWindow()
@@ -253,6 +303,27 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         else:
             # 未选中“开机自启动”
             self.functions.unset_startup()
+    
+    def sort_change(self,target_type:str):
+        global sort_type
+        self.tableWidget.setRowCount(0)
+        match target_type:
+            case "windowName_up":
+                sort_type = "windowName_up"
+            case "windowName_down":
+                print("windowName_down已触发")#--del
+                sort_type = "windowName_down"
+            case "useTime_up":
+                sort_type = "useTime_up"
+            case "useTime_down":
+                print("useTime_down已触发")#--del
+                sort_type = "useTime_down"
+            case _ :
+                print("预期外的值")
+        
+        
+    
+
 
 
 if __name__ == "__main__":
