@@ -9,6 +9,7 @@ https://wwfm.lanzoub.com/iMigp3ao0tah
 
 # 环境部署
 >前提：已安装conda环境。若未安装，请前往[我的博客](http://primordialblog.publicnote.top/)->环境配置->Windows安装miniconda
+>注：python版本必须在3.10以上
 1. 创建conda环境并激活
 ```bash
 conda create --name DeviceUsageTime python=3.10
@@ -40,9 +41,14 @@ python main.py
 - [x] 将数据保存在本地json文件中
 - [x] 增加开机自启动选项
 - [ ] 增加显示过往数据功能
-- [ ] 增加按软件使用时长排序功能
+- [x] 增加按软件使用时长排序功能
+- [ ] 优化UI
+- [ ] 记住用户设置
+
 
 # 给我提建议/bug
 e-mail:primordial@qq.com
 # 我的博客（有很多笔记和配置攻略~）
 [传送门](http://primordialblog.publicnote.top/)
+# 我的B站
+[传送门](https://space.bilibili.com/1587827517)
