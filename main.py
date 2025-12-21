@@ -235,11 +235,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         
 
 
-        # 提前创建Settings窗口实例
-        self.settings_window = QMainWindow()
-        self.settings_ui = Ui_Settings()
-        self.settings_ui.setupUi(self.settings_window)
-        self.settings_window.setWindowTitle("设置")
+        
 
 
     # 重写父类捕获退出的方法
@@ -290,6 +286,12 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
     
     # 动作：打开“设置”窗口
     def open_settings_window(self):
+        # 点击设置时再创建Settings窗口实例
+        self.settings_window = QMainWindow()
+        self.settings_ui = Ui_Settings()
+        self.settings_ui.setupUi(self.settings_window)
+        self.settings_window.setWindowTitle("设置")
+
         # 启动前执行初始化函数（因为是自己定义的，写在ui_settings.py里容易丢失）
         self.init_Settings_Window()
         self.settings_window.show()
