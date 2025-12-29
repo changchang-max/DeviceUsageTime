@@ -8,6 +8,7 @@ from ui_settings import Ui_Settings
 from PySide2.QtWidgets import *
 from PySide2.QtGui import QIcon,QPixmap
 from PySide2.QtCore import QEvent,Qt
+from qt_material import apply_stylesheet
 import mytools
 import imgaes
 import base64
@@ -210,6 +211,7 @@ class Init_ConfigFile:
         self.sort_type = self.config_dict.get("sort_type",None)
         if self.sort_type is None: 
             self.set_sort_type("windowName_up")
+            return "windowName_up" #如果不加这句，虽然在配置文件设置了，但返回的还是None
         return self.sort_type
     def set_sort_type(self,sort_type:str):
         self.config_dict["sort_type"] = sort_type
@@ -222,6 +224,7 @@ class Init_ConfigFile:
         self.auto_setup = self.config_dict.get("auto_setup",None)
         if self.auto_setup is None: 
             self.set_auto_setup(False)
+            return False
         return self.auto_setup
     def set_auto_setup(self,auto_setup:bool):
         self.config_dict["auto_setup"] = auto_setup
@@ -241,11 +244,11 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         current_date = time.strftime("%Y-%m-%d")
 
 
-        """配置文件数据初始化区"""
+        """配置文件数据初始化区(暂时没用到)"""
         # 从配置文件拿到排序方式
-        self.sort_type = config_File.get_sort_type()  #暂时没用山--del
+        # self.sort_type = config_File.get_sort_type()  
         # 从配置文件拿到开机自启功能开启状态
-        auto_setup = config_File.get_auto_setup()  
+        # auto_setup = config_File.get_auto_setup()  
 
 
         """窗口初始化区"""
@@ -261,6 +264,9 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         # 在系统托盘中显示图标
         self.tray_icon.show()
         self.tray_icon.activated.connect(self.on_tray_icon_activated)
+
+        # 隐藏TableWidget左侧默认自带的序号栏
+        self.tableWidget.verticalHeader().setVisible(False)
         
         
         # 定义存储所有应用使用时长的字典
@@ -314,7 +320,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
     def init_Window(self):
         # 设置列宽（单位：像素）
         self.tableWidget.setColumnWidth(0, 100)  # 第1列宽度
-        self.tableWidget.setColumnWidth(1, 460)  # 第2列宽度
+        self.tableWidget.setColumnWidth(1, 520)  # 第2列宽度
         self.tableWidget.setColumnWidth(2, 160)  # 第3列宽度
     
     # 初始化“设置”窗口
@@ -414,7 +420,12 @@ if __name__ == "__main__":
 
     # 主线程是主窗口，其下有子线程刷新活动状态
     app = QApplication(sys.argv)
+    # 2. 应用主题
+    # 'dark_teal.xml' 是主题文件名，你可以换成其他的
+    apply_stylesheet(app, theme='light_blue_500.xml')
+    # app.setAttribute(Qt.AA_EnableHighDpiScaling)
     window = MyMainWindow()
+    window.setFixedSize(800, 600)   #固定窗口大小，不可拉伸
     window.setWindowIcon(QIcon(to_image(imgaes.images["icon"])))
     window.setWindowTitle("屏幕视奸器")
     window.show()
