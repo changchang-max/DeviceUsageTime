@@ -20,6 +20,7 @@ import os
 def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict):
     # getall，其子元素若dict里有，则吧dict的数值+1。若没有，则新增，数值默认为1
     global current_date
+    global config_File  #配置文件类
     while not stop_event.is_set():
         # 判断是否为新的日期
         new_date = time.strftime("%Y-%m-%d", time.localtime())
@@ -36,6 +37,7 @@ def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict):
 
             # 过滤掉空标题的窗口
             for t in gw.getAllTitles():
+                # 去重操作
                 if t and t in all_applications_dict:
                     # 已有该应用，则使用时长+1
                     all_applications_dict[t] += 1
@@ -47,7 +49,7 @@ def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict):
                     pass
         
         # 每次循环都对字典进行排序(应该用clear与update把操作同步给原字典，而不只是局部变量)
-        new_applications_dict = Sort(all_applications_dict).sort(sort_type)
+        new_applications_dict = Sort(all_applications_dict).sort(config_File.get_sort_type())
         all_applications_dict.clear()
         all_applications_dict.update(new_applications_dict)
         
@@ -127,6 +129,7 @@ def auto_save_thread(all_applications_dict: dict):
         time.sleep(60)  # 每60秒保存一次
         save_data(all_applications_dict)
 
+
 # 定义“功能”类
 class Functions:
     def __init__(self):
@@ -173,17 +176,76 @@ class Sort:
     def useTime_down(self)->dict:
         return {k:v for k,v in sorted(self.all_applications_dict.items(),key=lambda x: x[1],reverse=True)}        
 
+# 配置文件相关类（初始化、读取、修改）
+class Init_ConfigFile:
+    # （先尝试从配置文件中拿到数据，如果拿不到则写入配置文件）
+    def __init__(self):
+        # 仅在程序打开的时候读取一次配置文件。剩下的都是如果有改动则写入。
+        self.configFile_path = pathlib.Path("./config/config.json") # 配置文件路径
+        self.init_config() # 初始化配置文件
+        with open(self.configFile_path, "r", encoding="utf-8") as file:
+            self.config_dict = json.load(file)    # 拿到存储的配置文件数据
+        
+        
+    
+    # 初始化配置文件（即第一次启动时新建配置文件）
+    def init_config(self):
+        
+        if self.configFile_path.exists() is False or self.configFile_path.is_file() is False:
+            self.configFile_path.parent.mkdir(parents=True, exist_ok=True) #创建父级目录
+            # 创建一个内容为空的配置文件
+            with open(self.configFile_path, "w", encoding="utf-8") as file:
+                # 配置文件内容预留
+                # 排序方式、开机自启{"sort_type": "useTime_up","auto_setup":True},
+                json.dump({}, file, ensure_ascii=False, indent=4)
+
+    # 将数据写回文件（在数据发生修改后使用）
+    def wirteback_config(self):
+        with open(self.configFile_path, "w", encoding="utf-8") as file:
+            json.dump(self.config_dict, file, ensure_ascii=False, indent=4)
+            
+    # 排序方式
+    def get_sort_type(self):
+        # 尝试拿到sort_type，如果拿不到（可能配置文件为空）则默认为useTime_up
+        self.sort_type = self.config_dict.get("sort_type",None)
+        if self.sort_type is None: 
+            self.set_sort_type("windowName_up")
+        return self.sort_type
+    def set_sort_type(self,sort_type:str):
+        self.config_dict["sort_type"] = sort_type
+        self.wirteback_config()
+        
+
+    # 开机自启
+    def get_auto_setup(self):
+        # 尝试拿到auto_setup，如果拿不到（可能配置文件为空）则默认为False
+        self.auto_setup = self.config_dict.get("auto_setup",None)
+        if self.auto_setup is None: 
+            self.set_auto_setup(False)
+        return self.auto_setup
+    def set_auto_setup(self,auto_setup:bool):
+        self.config_dict["auto_setup"] = auto_setup
+        self.wirteback_config()
+
 # 主窗口类
 class MyMainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
         """数据初始化区"""
         # 把存储当前时间放到这里，防止打包后的获取当天时间出现问题
-        global current_date,sort_type
+        global current_date
+        global config_File # 创建配置文件类实例
+        config_File = Init_ConfigFile()
+        # self.config_File = config_File
         # 存储当天时间
         current_date = time.strftime("%Y-%m-%d")
-        # 定义默认排序方式
-        sort_type = "windowName_up"
+
+
+        """配置文件数据初始化区"""
+        # 从配置文件拿到排序方式
+        self.sort_type = config_File.get_sort_type()  #暂时没用山--del
+        # 从配置文件拿到开机自启功能开启状态
+        auto_setup = config_File.get_auto_setup()  
 
 
         """窗口初始化区"""
@@ -257,8 +319,17 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
     
     # 初始化“设置”窗口
     def init_Settings_Window(self):
+        global config_File
         # 连接“开机自启动”复选框与对应的动作
         self.settings_ui.checkBox.stateChanged.connect(self.on_checkBox_stateChanged)
+
+        # 从配置文件拿到开机自启功能开启状态
+        auto_setup = config_File.get_auto_setup()  
+        # 设置复选框的状态
+        if auto_setup:
+            self.settings_ui.checkBox.setChecked(True)
+        else:
+            self.settings_ui.checkBox.setChecked(False)
     
     # 初始化数据，若存在当天数据则读取，而不是从空开始
     def init_data(self):
@@ -298,28 +369,29 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         
 
     def on_checkBox_stateChanged(self, state):
+        global config_File
         # 2是选中，0是未选中，1是部分选中（该复选框不存在此数值）
         if state == 2:
             # 选中“开机自启动”
-            self.functions.set_startup()
+            self.functions.set_startup()    #执行“设置开机自启动”
+            config_File.set_auto_setup(True)    #写回配置文件
         else:
             # 未选中“开机自启动”
-            self.functions.unset_startup()
+            self.functions.unset_startup()  #执行“取消开机自启动”
+            config_File.set_auto_setup(False)   #写回配置文件
     
     def sort_change(self,target_type:str):
-        global sort_type
+        global config_File
         self.tableWidget.setRowCount(0)
         match target_type:
             case "windowName_up":
-                sort_type = "windowName_up"
+                config_File.set_sort_type("windowName_up")
             case "windowName_down":
-                print("windowName_down已触发")#--del
-                sort_type = "windowName_down"
+                config_File.set_sort_type("windowName_down")
             case "useTime_up":
-                sort_type = "useTime_up"
+                config_File.set_sort_type("useTime_up")
             case "useTime_down":
-                print("useTime_down已触发")#--del
-                sort_type = "useTime_down"
+                config_File.set_sort_type("useTime_down")
             case _ :
                 print("预期外的值")
         
