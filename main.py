@@ -9,6 +9,7 @@ from PySide2.QtWidgets import *
 from PySide2.QtGui import QIcon,QPixmap
 from PySide2.QtCore import QEvent,Qt
 from qt_material import apply_stylesheet
+from ui_exit_window import Ui_Exit
 import mytools
 import imgaes
 import base64
@@ -283,17 +284,33 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.thread_auto_save.daemon = True  # 主线程退出时自动结束
         self.thread_auto_save.start()
 
+    # 退出程序时的确认窗口
+    def open_exit_window(self):
+        self.exit_window = QMainWindow()
+        self.exit_ui = Ui_Exit()
+        self.exit_ui.setupUi(self.exit_window)
 
+        self.exit_ui.pushButton.clicked.connect(self.exit_application_action)
+        self.exit_ui.pushButton_2.clicked.connect(self.exit_window.close)
+        self.exit_window.show()
+    
+    # 执行退出程序的动作
+    def exit_application_action(self):
 
-    # 重写父类捕获退出的方法
-    def closeEvent(self, event):
         # 通知线程停止
         stop_event.set()
         # 等待监听线程结束
         self.thread_windows_listening.join()
         # 关闭时保存一次数据
         save_data(self.all_applications_dict)
-        return super().closeEvent(event)
+
+        QApplication.quit()
+
+    # 重写父类捕获退出的方法
+    def closeEvent(self, event):
+        self.open_exit_window()
+        #return super().closeEvent(event)
+        event.ignore()  # 忽略关闭事件
     
     # 对窗口进行重定义初始化
     def init_Window(self):
@@ -352,6 +369,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         if event.type() == QEvent.WindowStateChange:
             if self.isMinimized():
                 self.hide()
+            
     # 单击托盘图标恢复显示
     def on_tray_icon_activated(self, reason):
         if reason == QSystemTrayIcon.Trigger:  # 单击托盘图标
@@ -399,6 +417,9 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             case _ :
                 print("预期外的值")
         
+    #“退出”窗口，当用户点X时弹出
+    def eixt_action(self):
+        self.close()
         
     
 

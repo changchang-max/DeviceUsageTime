@@ -2,6 +2,9 @@
 <ui version="4.0">
  <class>MainWindow</class>
  <widget class="QMainWindow" name="MainWindow">
+  <property name="enabled">
+   <bool>true</bool>
+  </property>
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -9,6 +12,12 @@
     <width>800</width>
     <height>600</height>
    </rect>
+  </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
   </property>
   <property name="windowTitle">
    <string>MainWindow</string>
@@ -71,28 +80,34 @@
     <property name="title">
      <string>设置</string>
     </property>
+    <addaction name="action_5"/>
    </widget>
    <addaction name="menu"/>
    <addaction name="menu_2"/>
   </widget>
   <action name="action">
    <property name="text">
-    <string>从高到低（名称）</string>
+    <string>从低到高（名称）</string>
    </property>
   </action>
   <action name="action_2">
    <property name="text">
-    <string>从低到高（名称）</string>
+    <string>从高到低（名称）</string>
    </property>
   </action>
   <action name="action_3">
    <property name="text">
-    <string>从高到低（时长）</string>
+    <string>从低到高（时长）</string>
    </property>
   </action>
   <action name="action_4">
    <property name="text">
-    <string>从低到高（时长）</string>
+    <string>从高到低（时长）</string>
+   </property>
+  </action>
+  <action name="action_5">
+   <property name="text">
+    <string>打开设置</string>
    </property>
   </action>
  </widget>
