@@ -18,6 +18,7 @@ import pathlib
 import os
 
 
+
 # 每秒获取所有窗口活动状态
 def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict):
     # getall，其子元素若dict里有，则吧dict的数值+1。若没有，则新增，数值默认为1
@@ -441,7 +442,14 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     # 2. 应用主题
     # 'dark_teal.xml' 是主题文件名，你可以换成其他的
-    apply_stylesheet(app, theme='light_blue_500.xml')
+    apply_stylesheet(
+        app,
+        theme='light_blue_500.xml',
+        extra={
+            'font_family': 'Microsoft YaHei',
+            'font_size': '18px',      # 全局字体大小
+        }
+    )
     # app.setAttribute(Qt.AA_EnableHighDpiScaling)
     window = MyMainWindow()
     window.setFixedSize(800, 600)   #固定窗口大小，不可拉伸
