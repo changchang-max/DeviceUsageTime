@@ -37,7 +37,7 @@ def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict):
         with thread_lock:
 
             # 过滤掉空标题的窗口
-            for t in gw.getAllTitles():
+            for t in list(set(gw.getAllTitles())):
                 # 去重操作
                 if t and t in all_applications_dict:
                     # 已有该应用，则使用时长+1
@@ -284,27 +284,6 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.thread_auto_save.start()
 
 
-        # 为“设置”菜单添加点击动作
-        # self.action_settings = QAction("打开设置",self)
-        # self.menu_2.addAction(self.action_settings) # 添加下拉选项
-        self.action_settings = self.action_5
-        self.action_settings.triggered.connect(self.open_settings_window)
-
-        # 为“排序”菜单添加点击动作
-        self.action_windowName_up = self.action
-        self.action_windowName_down = self.action_2
-        self.action_useTime_up = self.action_3
-        self.action_useTime_down = self.action_4
-
-        self.action_windowName_up.triggered.connect(lambda: self.sort_change("windowName_up"))
-        self.action_windowName_down.triggered.connect(lambda: self.sort_change("windowName_down"))
-        self.action_useTime_up.triggered.connect(lambda: self.sort_change("useTime_up"))
-        self.action_useTime_down.triggered.connect(lambda: self.sort_change("useTime_down"))
-        
-
-
-        
-
 
     # 重写父类捕获退出的方法
     def closeEvent(self, event):
@@ -322,6 +301,24 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.tableWidget.setColumnWidth(0, 100)  # 第1列宽度
         self.tableWidget.setColumnWidth(1, 520)  # 第2列宽度
         self.tableWidget.setColumnWidth(2, 160)  # 第3列宽度
+
+
+        # 为“设置”菜单添加点击动作
+        # self.action_settings = QAction("打开设置",self)
+        # self.menu_2.addAction(self.action_settings) # 添加下拉选项
+        self.action_settings = self.action_5
+        self.action_settings.triggered.connect(self.open_settings_window)
+
+        # 为“排序”菜单添加点击动作
+        self.action_windowName_up = self.action
+        self.action_windowName_down = self.action_2
+        self.action_useTime_up = self.action_3
+        self.action_useTime_down = self.action_4
+
+        self.action_windowName_up.triggered.connect(lambda: self.sort_change("windowName_up"))
+        self.action_windowName_down.triggered.connect(lambda: self.sort_change("windowName_down"))
+        self.action_useTime_up.triggered.connect(lambda: self.sort_change("useTime_up"))
+        self.action_useTime_down.triggered.connect(lambda: self.sort_change("useTime_down"))
     
     # 初始化“设置”窗口
     def init_Settings_Window(self):
@@ -373,7 +370,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.init_Settings_Window()
         self.settings_window.show()
         
-
+    # 设置页-开机自启动的单选框选择与取消动作
     def on_checkBox_stateChanged(self, state):
         global config_File
         # 2是选中，0是未选中，1是部分选中（该复选框不存在此数值）
@@ -386,6 +383,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             self.functions.unset_startup()  #执行“取消开机自启动”
             config_File.set_auto_setup(False)   #写回配置文件
     
+    # 主窗口页-表格排序动作函数
     def sort_change(self,target_type:str):
         global config_File
         self.tableWidget.setRowCount(0)
