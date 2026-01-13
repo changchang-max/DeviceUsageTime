@@ -10,20 +10,29 @@ from PySide2.QtGui import QIcon,QPixmap
 from PySide2.QtCore import QEvent,Qt
 from qt_material import apply_stylesheet
 from ui_exit_window import Ui_Exit
+from ui_history_data_window import Ui_history_data_window
 import mytools
 import imgaes
 import base64
 import json
 import pathlib
 import os
+import logging
+
+#1.引进了日志功能--差个保存为文件
+#2.增加查看历史数据功能
 
 
 
 # 每秒获取所有窗口活动状态
-def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict):
+def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict,the_old_date_application_dict:dict):
+    # the_old_date_application_dict属性有两种状态，一种是flase，另一种是字典数据
     # getall，其子元素若dict里有，则吧dict的数值+1。若没有，则新增，数值默认为1
     global current_date
     global config_File  #配置文件类
+    global old_date_status  # 是否处于查看历史信息状态true/flase
+    global old_date_refrush_flag    # 用来标记主窗口是否已经刷新过
+
     while not stop_event.is_set():
         # 判断是否为新的日期
         new_date = time.strftime("%Y-%m-%d", time.localtime())
@@ -52,12 +61,31 @@ def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict):
                     pass
         
         # 每次循环都对字典进行排序(应该用clear与update把操作同步给原字典，而不只是局部变量)
-        new_applications_dict = Sort(all_applications_dict).sort(config_File.get_sort_type())
-        all_applications_dict.clear()
-        all_applications_dict.update(new_applications_dict)
+        def sort_dict(application_dict:dict):
+            new_applications_dict = Sort(application_dict).sort(config_File.get_sort_type())
+            application_dict.clear()
+            application_dict.update(new_applications_dict)
+
+        # old_date_status = False是正常状态，即历史模式未开启状态
+        if old_date_status is False:
+            sort_dict(all_applications_dict)
+        else:
+            sort_dict(the_old_date_application_dict)
         
-        # 调用关键函数
-        add_row(tableWidget, all_applications_dict)
+
+        try:
+            if old_date_status is not False:
+                if old_date_refrush_flag is False:
+                    tableWidget.setRowCount(0) #清空表单
+                    old_date_refrush_flag = True    # 标记为已刷新
+                add_row(tableWidget, the_old_date_application_dict)
+            else:
+                # 调用关键函数,向表中添加行
+                add_row(tableWidget, all_applications_dict)
+        except:
+            logging.error("window_monitor函数出错了")
+
+        # add_row(tableWidget, all_applications_dict)
         time.sleep(1) #每隔一秒捕获一次
 
 # (QTableWidget对象,指定列,指定值)判断表的指定列是否存在指定值，存在则返回row_index
@@ -217,6 +245,7 @@ class Init_ConfigFile:
         return self.sort_type
     def set_sort_type(self,sort_type:str):
         self.config_dict["sort_type"] = sort_type
+
         self.wirteback_config()
         
 
@@ -240,10 +269,15 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         # 把存储当前时间放到这里，防止打包后的获取当天时间出现问题
         global current_date
         global config_File # 创建配置文件类实例
+        global old_date_status  # 表示用户是否正处于查看历史信息的状态 true正在查看历史/flase没有查看历史
+        global old_date_refrush_flag    # 用来标记主窗口是否已经刷新过
         config_File = Init_ConfigFile()
         # self.config_File = config_File
         # 存储当天时间
         current_date = time.strftime("%Y-%m-%d")
+
+        old_date_status = False
+        old_date_refrush_flag = False
 
 
         """配置文件数据初始化区(暂时没用到)"""
@@ -274,10 +308,13 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         # 定义存储所有应用使用时长的字典
         self.all_applications_dict = {}
         self.init_data()  # 初始化数据
+        # 有false和字典数据两种状态。被用户双击选中日期后会变为字典数据。用户再次选择当天日期后，再变回false
+        self.the_old_date_application_dict = {} #用于存储旧日期的数据。
+        
 
 
         # 启动监控线程
-        self.thread_windows_listening = threading.Thread(target=window_monitor, args=(self.tableWidget,self.all_applications_dict))
+        self.thread_windows_listening = threading.Thread(target=window_monitor, args=(self.tableWidget,self.all_applications_dict,self.the_old_date_application_dict))
         self.thread_windows_listening.daemon = True  # 主线程退出时自动结束
         self.thread_windows_listening.start()
         # 启动自动保存json文件线程
@@ -332,6 +369,10 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.action_windowName_down = self.action_2
         self.action_useTime_up = self.action_3
         self.action_useTime_down = self.action_4
+
+        # 为“历史”菜单添加点击动作
+        self.action_history = self.action_6
+        self.action_history.triggered.connect(self.open_historyData_window)
 
         self.action_windowName_up.triggered.connect(lambda: self.sort_change("windowName_up"))
         self.action_windowName_down.triggered.connect(lambda: self.sort_change("windowName_down"))
@@ -421,6 +462,57 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
     #“退出”窗口，当用户点X时弹出
     def eixt_action(self):
         self.close()
+
+    # 打开历史数据查看窗口
+    def open_historyData_window(self):
+        self.historyData_window = QMainWindow()
+        self.historyData_ui = Ui_history_data_window()
+        self.historyData_ui.setupUi(self.historyData_window)
+        
+        # 初始化listWidget内容
+        self.init_historyList()
+        # 双击内容打开文件->即重绘主窗口并关闭此窗口。同时后台记录不要断
+        self.historyData_ui.listWidget.itemDoubleClicked.connect(self.on_item_doubleClicked)
+
+        self.historyData_window.show()
+    
+    # 初始化listWidget历史数据
+    def init_historyList(self):
+        self.historyData_ui.listWidget.clear()
+        # 将历史数据文件名添加到listWidget中
+        for i in self.get_all_historyDataName():
+            self.historyData_ui.listWidget.addItem(i)
+        
+
+    # 返回history_data文件夹中所有历史数据文件名（可能会有非常规文件，要有try异常捕获）
+    def get_all_historyDataName(self) -> list:
+        # 判断文件夹是否存在（仅判断，不存在则返回错误信息）
+        historyData_dir = pathlib.Path("./history_data")
+        if historyData_dir.exists() is False or historyData_dir.is_dir() is False:
+            logging.error("history_data文件夹不存在")
+            return []
+        
+        # 获取文件夹下所有文件名
+        historyData_list = os.listdir(historyData_dir)
+
+        # 把列表翻转一下，日期先新后旧好一些
+        return sorted(historyData_list,reverse=True)
+
+    # listWidget中的内容被双击时触发的函数
+    def on_item_doubleClicked(self,item):
+        global old_date_status
+        global old_date_refrush_flag
+        old_date_refrush_flag = False
+        print("双击：",item.text())#--del
+        if item.text() == f"data_{current_date}.json":
+            # 点击当天日期后，将查看历史数据功能关闭
+            old_date_status = False
+        else:
+            old_date_status = True # 开启查看历史信息模式
+            with open(f"./history_data/{item.text()}","r",encoding="utf-8") as file:
+                self.the_old_date_application_dict.update(json.load(file))
+                print(self.the_old_date_application_dict)#--del
+        
         
     
 

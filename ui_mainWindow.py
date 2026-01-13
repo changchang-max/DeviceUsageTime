@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'mainWindowSBAGlk.ui'
+## Form generated from reading UI file 'mainWindowGZiOfx.ui'
 ##
 ## Created by: Qt User Interface Compiler version 5.14.1
 ##
@@ -37,6 +37,8 @@ class Ui_MainWindow(object):
         self.action_4.setObjectName(u"action_4")
         self.action_5 = QAction(MainWindow)
         self.action_5.setObjectName(u"action_5")
+        self.action_6 = QAction(MainWindow)
+        self.action_6.setObjectName(u"action_6")
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName(u"centralwidget")
         self.tableWidget = QTableWidget(self.centralwidget)
@@ -61,15 +63,19 @@ class Ui_MainWindow(object):
         self.menu.setObjectName(u"menu")
         self.menu_2 = QMenu(self.menubar)
         self.menu_2.setObjectName(u"menu_2")
+        self.menu_3 = QMenu(self.menubar)
+        self.menu_3.setObjectName(u"menu_3")
         MainWindow.setMenuBar(self.menubar)
 
         self.menubar.addAction(self.menu.menuAction())
+        self.menubar.addAction(self.menu_3.menuAction())
         self.menubar.addAction(self.menu_2.menuAction())
         self.menu.addAction(self.action)
         self.menu.addAction(self.action_2)
         self.menu.addAction(self.action_3)
         self.menu.addAction(self.action_4)
         self.menu_2.addAction(self.action_5)
+        self.menu_3.addAction(self.action_6)
 
         self.retranslateUi(MainWindow)
 
@@ -83,6 +89,7 @@ class Ui_MainWindow(object):
         self.action_3.setText(QCoreApplication.translate("MainWindow", u"\u4ece\u4f4e\u5230\u9ad8\uff08\u65f6\u957f\uff09", None))
         self.action_4.setText(QCoreApplication.translate("MainWindow", u"\u4ece\u9ad8\u5230\u4f4e\uff08\u65f6\u957f\uff09", None))
         self.action_5.setText(QCoreApplication.translate("MainWindow", u"\u6253\u5f00\u8bbe\u7f6e", None))
+        self.action_6.setText(QCoreApplication.translate("MainWindow", u"\u6253\u5f00\u5386\u53f2\u9762\u677f", None))
         ___qtablewidgetitem = self.tableWidget.horizontalHeaderItem(0)
         ___qtablewidgetitem.setText(QCoreApplication.translate("MainWindow", u"\u5e8f\u53f7", None));
         ___qtablewidgetitem1 = self.tableWidget.horizontalHeaderItem(1)
@@ -91,5 +98,6 @@ class Ui_MainWindow(object):
         ___qtablewidgetitem2.setText(QCoreApplication.translate("MainWindow", u"\u4f7f\u7528\u65f6\u957f", None));
         self.menu.setTitle(QCoreApplication.translate("MainWindow", u"\u6392\u5e8f", None))
         self.menu_2.setTitle(QCoreApplication.translate("MainWindow", u"\u8bbe\u7f6e", None))
+        self.menu_3.setTitle(QCoreApplication.translate("MainWindow", u"\u5386\u53f2", None))
     # retranslateUi
 
