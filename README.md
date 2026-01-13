@@ -7,6 +7,12 @@ exe可执行文件在`./dist`目录中  **<--请优先选择这个**
 https://wwfm.lanzoub.com/iMigp3ao0tah
 密码:f0cp
 
+![主页面](./git_images/MainPage.png)
+![历史数据](./git_images/HistoryPage.png)
+![设置页](./git_images/SettingsPage.png)
+![排序](./git_images/TheSort.png)
+![最小化](./git_images/min.png)
+
 # 环境部署
 >前提：已安装conda环境。若未安装，请前往[我的博客](http://primordialblog.publicnote.top/)->环境配置->Windows安装miniconda
 >注：python版本必须在3.10以上
