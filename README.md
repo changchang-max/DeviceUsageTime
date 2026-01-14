@@ -7,11 +7,11 @@ exe可执行文件在`./dist`目录中  **<--请优先选择这个**
 https://wwfm.lanzoub.com/iMigp3ao0tah
 密码:f0cp
 
-![主页面](./git_images/MainPage.png)
-![历史数据](./git_images/HistoryPage.png)
-![设置页](./git_images/SettingsPage.png)
-![排序](./git_images/TheSort.png)
-![最小化](./git_images/min.png)
+![主页面](https://primordialimg.publicnote.top/app/thumb.php?img=/i/2026/01/14/f7w93k.png)
+![历史数据](https://primordialimg.publicnote.top/app/thumb.php?img=/i/2026/01/14/f7w7rq.png)
+![设置页](https://primordialimg.publicnote.top/app/thumb.php?img=/i/2026/01/14/f7wbol.png)
+![排序](https://primordialimg.publicnote.top/app/thumb.php?img=/i/2026/01/14/f7wbol.png)
+![最小化](https://primordialimg.publicnote.top/app/thumb.php?img=/i/2026/01/14/f7w8l9.png)
 
 # 环境部署
 >前提：已安装conda环境。若未安装，请前往[我的博客](http://primordialblog.publicnote.top/)->环境配置->Windows安装miniconda
@@ -70,6 +70,8 @@ python main.py
 18.✅️增加一个安装程序
 19.引进了日志功能--差个保存为文件功能（logging模块）
 20.✅️增加查看历史数据功能
+21.操作提示
+22.用户自定义过滤指定窗口名
 
 bug!!:
 ✅️开机自启动那个在注册表里的路径好像不太对

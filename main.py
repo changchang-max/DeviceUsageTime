@@ -19,8 +19,6 @@ import pathlib
 import os
 import logging
 
-#1.引进了日志功能--差个保存为文件
-#2.增加查看历史数据功能
 
 
 
@@ -80,6 +78,9 @@ def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict,the_old_
                     old_date_refrush_flag = True    # 标记为已刷新
                 add_row(tableWidget, the_old_date_application_dict)
             else:
+                if old_date_refrush_flag is False:
+                    tableWidget.setRowCount(0) #清空表单
+                    old_date_refrush_flag = True    # 标记为已刷新
                 # 调用关键函数,向表中添加行
                 add_row(tableWidget, all_applications_dict)
         except:
@@ -503,7 +504,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         global old_date_status
         global old_date_refrush_flag
         old_date_refrush_flag = False
-        print("双击：",item.text())#--del
+        
         if item.text() == f"data_{current_date}.json":
             # 点击当天日期后，将查看历史数据功能关闭
             old_date_status = False
@@ -511,7 +512,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             old_date_status = True # 开启查看历史信息模式
             with open(f"./history_data/{item.text()}","r",encoding="utf-8") as file:
                 self.the_old_date_application_dict.update(json.load(file))
-                print(self.the_old_date_application_dict)#--del
+                
         
         
     
