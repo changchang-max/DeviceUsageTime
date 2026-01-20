@@ -391,8 +391,10 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         # 设置复选框的状态
         if auto_setup:
             self.settings_ui.checkBox.setChecked(True)
+            self.settings_ui.label_3.setText("已开启")
         else:
             self.settings_ui.checkBox.setChecked(False)
+            self.settings_ui.label_3.setText("已关闭")
     
     # 初始化数据，若存在当天数据则读取，而不是从空开始
     def init_data(self):
@@ -439,10 +441,12 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             # 选中“开机自启动”
             self.functions.set_startup()    #执行“设置开机自启动”
             config_File.set_auto_setup(True)    #写回配置文件
+            self.settings_ui.label_3.setText("已开启")  #将文字重新设置为已开启
         else:
             # 未选中“开机自启动”
             self.functions.unset_startup()  #执行“取消开机自启动”
             config_File.set_auto_setup(False)   #写回配置文件
+            self.settings_ui.label_3.setText("已关闭")  #将文字重新设置为已关闭
     
     # 主窗口页-表格排序动作函数
     def sort_change(self,target_type:str):

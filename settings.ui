@@ -3,7 +3,7 @@
  <class>Settings</class>
  <widget class="QWidget" name="Settings">
   <property name="enabled">
-   <bool>false</bool>
+   <bool>true</bool>
   </property>
   <property name="geometry">
    <rect>
@@ -23,7 +23,7 @@
    <string>Form</string>
   </property>
   <property name="windowIcon">
-   <iconset resource="resources.qrc">
+   <iconset>
     <normaloff>:/icons/icon.ico</normaloff>:/icons/icon.ico</iconset>
   </property>
   <widget class="QListWidget" name="listWidget">
@@ -74,7 +74,7 @@
   </widget>
   <widget class="QStackedWidget" name="stackedWidget">
    <property name="enabled">
-    <bool>false</bool>
+    <bool>true</bool>
    </property>
    <property name="geometry">
     <rect>
@@ -93,7 +93,7 @@
    <widget class="QWidget" name="page_1">
     <widget class="QCheckBox" name="checkBox">
      <property name="enabled">
-      <bool>false</bool>
+      <bool>true</bool>
      </property>
      <property name="geometry">
       <rect>
@@ -134,6 +134,19 @@
      </property>
      <property name="text">
       <string>通用</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_3">
+     <property name="geometry">
+      <rect>
+       <x>150</x>
+       <y>70</y>
+       <width>54</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>null</string>
      </property>
     </widget>
    </widget>

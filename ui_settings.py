@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'settingsSxSvIo.ui'
+## Form generated from reading UI file 'settingsKalTeY.ui'
 ##
 ## Created by: Qt User Interface Compiler version 5.14.1
 ##
@@ -68,6 +68,9 @@ class Ui_Settings(object):
         font1.setBold(True)
         font1.setWeight(75)
         self.label.setFont(font1)
+        self.label_3 = QLabel(self.page_1)
+        self.label_3.setObjectName(u"label_3")
+        self.label_3.setGeometry(QRect(150, 70, 54, 21))
         self.stackedWidget.addWidget(self.page_1)
         self.page_2 = QWidget()
         self.page_2.setObjectName(u"page_2")
@@ -98,6 +101,7 @@ class Ui_Settings(object):
 
         self.checkBox.setText(QCoreApplication.translate("Settings", u"\u5f00\u673a\u81ea\u542f\u52a8", None))
         self.label.setText(QCoreApplication.translate("Settings", u"\u901a\u7528", None))
+        self.label_3.setText(QCoreApplication.translate("Settings", u"null", None))
         self.label_2.setText(QCoreApplication.translate("Settings", u"\u8fd9\u662f\u7b2c\u4e8c\u4e2a\u9875\u9762", None))
     # retranslateUi
 
