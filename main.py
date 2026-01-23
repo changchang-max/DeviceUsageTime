@@ -20,7 +20,13 @@ import os
 import logging
 
 
+# 生成程序崩溃日志
+logging.basicConfig(filename="crash.log", level=logging.ERROR)
 
+def handle_exception(exc_type, exc_value, exc_traceback):
+    logging.error("程序崩溃", exc_info=(exc_type, exc_value, exc_traceback))
+    
+sys.excepthook = handle_exception  #sys.excepthook可以捕获所有未被捕获的异常
 
 # 每秒获取所有窗口活动状态
 def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict,the_old_date_application_dict:dict):

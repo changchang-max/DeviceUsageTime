@@ -1,10 +1,12 @@
 ; ===========================
 ; 安装器基本信息
 ; ===========================
+Unicode true
+
 Name "屏幕视奸器"
 OutFile "屏幕视奸器安装程序.exe"
 InstallDir $PROGRAMFILES\屏幕视奸器
-RequestExecutionLevel user
+RequestExecutionLevel admin     ;设置安装权限user/admin
 
 ; ===========================
 ; 页面设置
@@ -32,7 +34,7 @@ Section "Install"
     File /r "D:\Code\PythonCode\Projects\DeviceUsageTime\屏幕视奸器\config\*.*"
 
     ; 创建桌面快捷方式
-    CreateShortcut "$DESKTOP\屏幕视奸器.lnk" "$INSTDIR\MyApp.exe" "" "$INSTDIR\main.exe" 0
+    CreateShortcut "$DESKTOP\屏幕视奸器.lnk" "$INSTDIR\main.exe" "" "$INSTDIR\main.exe" 0
 
 
 SectionEnd
