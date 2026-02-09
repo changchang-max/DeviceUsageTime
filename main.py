@@ -1,4 +1,3 @@
-import pygetwindow as gw
 import threading
 import time
 import sys
@@ -18,6 +17,96 @@ import json
 import pathlib
 import os
 import logging
+import psutil
+
+"""数据结构
+all_applications_dict = {
+进程title:{
+“pid":pid值,
+"title":进程名,
+"use_time":使用时长
+}}
+类型：dict
+程序内部所使用的复杂数据
+
+
+simple_data=
+{
+    "NVIDIA GeForce Overlay": 14,
+    "main.py - LocalVSCode (工作区) - Visual Studio Code": 14,
+}
+类型：dict
+存储在数据文件中的简单数据
+"""
+
+
+# 过滤系统路径
+SYSTEM_PATHS = (
+    r"C:\Windows",
+    r"C:\Program Files\WindowsApps",
+)
+
+# 过滤用户
+SYSTEM_USERS = (
+    "SYSTEM",
+    "LOCAL SERVICE",
+    "NETWORK SERVICE",
+)
+
+# 判断进程是否为用户应用
+def is_user_app(proc: psutil.Process) -> bool:
+    try:
+        exe = proc.exe()
+        username = proc.username()
+
+        if not exe:
+            return False
+
+        exe = exe.lower()
+
+        # 排除系统路径
+        for path in SYSTEM_PATHS:
+            if exe.startswith(path.lower()):
+                return False
+
+        # 排除系统用户
+        for user in SYSTEM_USERS:
+            if user.lower() in username.lower():
+                return False
+
+        return True
+
+    except (psutil.AccessDenied, psutil.NoSuchProcess):
+        return False
+
+ 
+def get_user_app_pids() -> dict:
+    user_procs = []
+
+    # ① 先收集所有“用户应用进程”
+    for proc in psutil.process_iter(['pid', 'name']):
+        if is_user_app(proc):
+            user_procs.append(proc)
+
+    # ② 建立 pid 映射
+    pid_map = {p.pid: p for p in user_procs}
+
+    result = {}
+
+    # ③ 过滤子进程（方案 1）
+    for proc in user_procs:
+        try:
+            # 如果父进程不在用户进程集合中 → 保留
+            if proc.ppid() not in pid_map:
+                result[proc.name()] = {
+                    "pid": proc.pid,
+                    "title": proc.name(),
+                    "use_time":0
+                }
+        except (psutil.AccessDenied, psutil.NoSuchProcess):
+            continue
+
+    return result
 
 
 # 生成程序崩溃日志
@@ -50,19 +139,23 @@ def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict,the_old_
 
         # 加上线程锁防止资源竞争
         with thread_lock:
-
-            # 过滤掉空标题的窗口
-            for t in list(set(gw.getAllTitles())):
-                # 去重操作
-                if t and t in all_applications_dict:
-                    # 已有该应用，则使用时长+1
-                    all_applications_dict[t] += 1
-                elif t:
-                    # 新应用，添加到字典，使用时长默认为1
-                    all_applications_dict[t] = 1
+            # 获取当前用户应用进程
+            current_procs = get_user_app_pids()
+            
+            # 更新all_applications_dict
+            # 1. 对现有进程的use_time+1
+            for title in list(all_applications_dict.keys()):
+                if title in current_procs:
+                    all_applications_dict[title]["use_time"] += 1
                 else:
-                    # 标题为空的窗口，忽略
-                    pass
+                    # 进程已结束，从字典中移除
+                    del all_applications_dict[title]
+            
+            # 2. 添加新进程
+            for title, proc_info in current_procs.items():
+                if title not in all_applications_dict:
+                    all_applications_dict[title] = proc_info.copy()
+                    all_applications_dict[title]["use_time"] = 1
         
         # 每次循环都对字典进行排序(应该用clear与update把操作同步给原字典，而不只是局部变量)
         def sort_dict(application_dict:dict):
@@ -78,21 +171,24 @@ def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict,the_old_
         
 
         try:
+            # 判断是否处于查看历史信息状态,默认为false，不处于
             if old_date_status is not False:
                 if old_date_refrush_flag is False:
                     tableWidget.setRowCount(0) #清空表单
                     old_date_refrush_flag = True    # 标记为已刷新
+                # print("当前处于历史状态")
                 add_row(tableWidget, the_old_date_application_dict)
             else:
                 if old_date_refrush_flag is False:
                     tableWidget.setRowCount(0) #清空表单
                     old_date_refrush_flag = True    # 标记为已刷新
                 # 调用关键函数,向表中添加行
+                # print("当前处于实时状态")
                 add_row(tableWidget, all_applications_dict)
-        except:
-            logging.error("window_monitor函数出错了")
+        except Exception as e:
+            logging.error(f"window_monitor函数出错了: {str(e)}")
+            print(f"Error in window_monitor: {str(e)}")
 
-        # add_row(tableWidget, all_applications_dict)
         time.sleep(1) #每隔一秒捕获一次
 
 # (QTableWidget对象,指定列,指定值)判断表的指定列是否存在指定值，存在则返回row_index
@@ -106,13 +202,12 @@ def is_exist(tableWidget: QTableWidget, column: int, value) -> bool:
 
 # (QTableWidget对象,标题列表)向表中添加行
 def add_row(tableWidget: QTableWidget, all_applications_dict: dict):
-    title_list = all_applications_dict.keys()
-    for title in title_list:
+    for title, proc_info in all_applications_dict.items():
         # 先判断表里有没有，有则更改其值，没有则添加新行
-        tabel_row = is_exist(tableWidget, 1, title)
+        tabel_row = is_exist(tableWidget, 1, proc_info["title"])
         if tabel_row is not False:
             # time已经在字典里更新好了，可以直接用字典的内容覆盖上去
-            Item_new_time = QTableWidgetItem(mytools.get_strtime(all_applications_dict[title]))
+            Item_new_time = QTableWidgetItem(mytools.get_strtime(proc_info["use_time"]))
             Item_new_time.setTextAlignment(Qt.AlignCenter) # 为新的值也设置文本居中
             tableWidget.setItem(tabel_row, 2, Item_new_time)
         else:
@@ -121,12 +216,12 @@ def add_row(tableWidget: QTableWidget, all_applications_dict: dict):
             tableWidget.insertRow(row)
 
             table_id = row + 1  # 定义id的值
-            tabel_default_time = all_applications_dict[title]  # 定义新建时的time值
+            tabel_default_time = proc_info["use_time"]  # 定义新建时的time值
             
             
             # 设置每个格子的内容
             Item_id = QTableWidgetItem(str(table_id))
-            Item_title = QTableWidgetItem(title)
+            Item_title = QTableWidgetItem(proc_info["title"])
             Item_time = QTableWidgetItem(mytools.get_strtime(tabel_default_time))
             # 设置格子文本居中显示
             Item_id.setTextAlignment(Qt.AlignCenter)
@@ -153,13 +248,18 @@ def save_data(data:dict):
     if p.exists() is False or p.is_dir() is False:
         p.mkdir()
 
+    # 转换为简单格式 {title:use_time,...}
+    simple_data = {}
+    for title, proc_info in data.items():
+        simple_data[title] = proc_info["use_time"]
+
     # 覆盖写入
     file_name = pathlib.Path(f"./history_data/data_{current_date}.json")
 
     # 加上线程锁防止竞争
     with thread_lock:
         with open(str(file_name), "w", encoding="utf-8") as file:
-            json.dump(data, file, ensure_ascii=False, indent=4)
+            json.dump(simple_data, file, ensure_ascii=False, indent=4)
 
 # 自动保存线程函数
 def auto_save_thread(all_applications_dict: dict):
@@ -206,13 +306,13 @@ class Sort:
         return {k:self.all_applications_dict[k] for k in sorted(self.all_applications_dict.keys())}
     # 按名字降序
     def windowName_down(self)->dict:
-        return {k:self.all_applications_dict[k] for k in sorted(self.all_applications_dict.keys(),reverse=True)}
+        return {k:self.all_applications_dict[k] for k in sorted(self.all_applications_dict.keys(), reverse=True)}
     # 按值升序
     def useTime_up(self)->dict:
-        return {k:v for k,v in sorted(self.all_applications_dict.items(),key=lambda x: x[1])}
+        return {k:v for k,v in sorted(self.all_applications_dict.items(), key=lambda x: x[1]["use_time"])}
     # 按值降序
     def useTime_down(self)->dict:
-        return {k:v for k,v in sorted(self.all_applications_dict.items(),key=lambda x: x[1],reverse=True)}        
+        return {k:v for k,v in sorted(self.all_applications_dict.items(), key=lambda x: x[1]["use_time"], reverse=True)}        
 
 # 配置文件相关类（初始化、读取、修改）
 class Init_ConfigFile:
@@ -315,6 +415,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         # 定义存储所有应用使用时长的字典
         self.all_applications_dict = {}
         self.init_data()  # 初始化数据
+        # print(self.all_applications_dict)  #--del
         # 有false和字典数据两种状态。被用户双击选中日期后会变为字典数据。用户再次选择当天日期后，再变回false
         self.the_old_date_application_dict = {} #用于存储旧日期的数据。
         
@@ -410,7 +511,17 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         if p.exists() and p.is_file():
             # 读取json文件
             with open(file_name, "r", encoding="utf-8") as file:
-                self.all_applications_dict = json.load(file)
+                simple_data = json.load(file)
+                # 转换为程序内部使用的复杂格式
+                self.all_applications_dict = {}
+                for title, use_time in simple_data.items():
+                    # 由于保存时只保存了title和use_time，pid需要重新获取
+                    # 因为是历史记录，pid没有意义，设为0即可
+                    self.all_applications_dict[title] = {
+                        "pid": 0,
+                        "title": title,
+                        "use_time": use_time
+                    }
         else:
             # 不存在则初始化为空字典
             self.all_applications_dict = {}
@@ -521,7 +632,15 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         else:
             old_date_status = True # 开启查看历史信息模式
             with open(f"./history_data/{item.text()}","r",encoding="utf-8") as file:
-                self.the_old_date_application_dict.update(json.load(file))
+                simple_data = json.load(file)
+                # 转换为程序内部使用的复杂格式
+                self.the_old_date_application_dict.clear()#不能用self.the_old_date_application_dict = {}的形式，在线程传输时会出问题
+                for title, use_time in simple_data.items():
+                    self.the_old_date_application_dict[title] = {
+                        "pid": 0,
+                        "title": title,
+                        "use_time": use_time
+                    }
                 
         
         
