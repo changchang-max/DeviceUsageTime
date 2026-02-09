@@ -147,9 +147,7 @@ def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict,the_old_
             for title in list(all_applications_dict.keys()):
                 if title in current_procs:
                     all_applications_dict[title]["use_time"] += 1
-                else:
-                    # 进程已结束，从字典中移除
-                    del all_applications_dict[title]
+                
             
             # 2. 添加新进程
             for title, proc_info in current_procs.items():
