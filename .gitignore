@@ -16,3 +16,6 @@ client/translation/
 
 # python自己产生的缓存文件
 client/__pycache__/
+
+# 开发者随笔日记
+diary/
