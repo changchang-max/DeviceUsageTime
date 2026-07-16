@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8" ?>
+
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="top.primordialcode.backend.mapper.UserAuthMapper">
+    <select id="findAllUserEmail"
+            resultType="UserAuthEntity">
+        select user_email,user_key
+        from user_auth
+    </select>
+
+    <insert id="insert">
+        insert into user_auth(user_email,user_password,user_key)
+        values(#{user_email},#{user_password},#{user_key})
+    </insert>
+
+    <delete id="deleteByEmail">
+        delete
+        from user_auth
+        where user_email = #{email}
+    </delete>
+
+    <update id="update">
+        update user_auth
+        set user_email = #{user_email},user_password = #{user_password},user_key = #{user_key}
+        where id = #{user_email}
+    </update>
+
+    <update id="updateKey">
+        update user_auth
+        set user_email = user_email,user_password = user_password,user_key = #{user_key}
+        where user_email = #{email}
+    </update>
+
+    <select id="existsByEmail"
+            resultType="boolean">
+        select exists(
+        select 1
+        from user_auth
+        where user_email = #{user_email}
+        )
+    </select>
+
+</mapper>

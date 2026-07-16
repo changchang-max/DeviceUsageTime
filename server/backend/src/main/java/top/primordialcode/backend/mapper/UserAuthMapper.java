@@ -1,0 +1,55 @@
+package top.primordialcode.backend.mapper;
+
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
+import top.primordialcode.backend.entity.UserAuthEntity;
+
+import java.util.HashMap;
+import java.util.List;
+
+@Mapper
+public interface UserAuthMapper {
+
+    /**
+     * 返回所有用户的邮箱和key（注：不要含密码）
+     * @return 返回UserAuthEntity对象，其中user_password应为null
+     */
+    UserAuthEntity findAllUserEmail();
+
+    /**
+     * 增加新的用户信息
+     * @param user 完整的entity对象
+     * @return 受影响的行数
+     */
+    int insert(UserAuthEntity user);
+
+    /**
+     * 删除用户信息
+     * @param email 用户邮箱
+     * @return 受影响的行数
+     */
+    int deleteByEmail(String email);
+
+    /**
+     * 更新用户信息
+     * @param user 应传入完整的UserAuth
+     * @return 受影响的行数
+     */
+    int update(UserAuthEntity user);
+
+    /**
+     * 仅更新user_key
+     * @param email 要修改的目标用户邮箱
+     * @param user_key 新的user_key
+     * @return 受影响的行数
+     */
+    int updateKey(@Param("email") String email, @Param("user_key") String user_key);
+
+    /**
+     * 查询用户是否存在
+     * @param user_email 要查询的目标邮箱
+     * @return true：存在 flase：不存在
+     */
+    boolean existsByEmail(String user_email);
+}

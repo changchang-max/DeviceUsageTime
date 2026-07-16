@@ -27,7 +27,6 @@
 
 ```json
 {
-  "success": true,           // 是否成功
   "code": 200,               // 状态码
   "message": "操作成功",      // 提示信息
   "data": {}                 // 响应数据
@@ -38,20 +37,76 @@
 
 ```json
 {
-  "success": false,
   "code": 400,
   "message": "请求参数错误",
-  "error": "邮箱格式不正确"
+  "data": {}
 }
 ```
 
 ## 3. 用户认证接口
 
-### 3.1 用户注册
+### 3.1 发送验证码
+
+**接口**: `GET /auth/sendcode`
+
+**描述**: 发送验证码到指定邮箱,用于注册或登录验证
+
+**请求参数**:
+- `to`: 目标邮箱地址,必填
+
+**请求示例**: `GET /auth/sendcode?to=user@example.com`
+
+**成功响应** (200):
+```json
+{
+  "code": 200,
+  "message": "操作成功",
+  "data": null
+}
+```
+
+**错误响应**:
+- 400: 邮箱地址为空或格式错误
+
+**说明**:
+- 验证码为6位数字
+- 验证码有效期为5分钟
+- 验证码会发送到指定邮箱
+- 请勿将验证码泄露给他人
+
+---
+
+### 3.2 验证码校验
+
+**接口**: `GET /auth/verify`
+
+**描述**: 校验邮箱验证码是否正确
+
+**请求参数**:
+- `email`: 邮箱地址,必填
+- `code`: 验证码,必填
+
+**请求示例**: `GET /auth/verify?email=user@example.com&code=123456`
+
+**成功响应** (200):
+```json
+{
+  "code": 200,
+  "message": "验证成功",
+  "data": null
+}
+```
+
+**错误响应**:
+- 400: 验证码错误或已过期
+
+---
+
+### 3.3 用户注册
 
 **接口**: `POST /auth/register`
 
-**描述**: 用户通过邮箱注册新账号
+**描述**: 用户通过邮箱注册新账号(需先调用验证码接口获取验证码)
 
 **请求参数**:
 ```json
@@ -64,13 +119,11 @@
 **成功响应** (201):
 ```json
 {
-  "success": true,
   "code": 201,
   "message": "注册成功",
   "data": {
-    "userId": "12345",
     "email": "user@example.com",
-    "secretKey": "aB3$xY9zK2mN7pQ",  // 自动生成的秘钥
+    "user_key": "aB3$xY9zK2mN7pQ",  // 自动生成的秘钥
     "createdAt": "2026-07-12T10:30:45Z"
   }
 }
@@ -82,7 +135,7 @@
 
 ---
 
-### 3.2 用户登录
+### 3.4 用户登录
 
 **接口**: `POST /auth/login`
 
@@ -117,7 +170,33 @@
 
 ---
 
-### 3.3 刷新Token
+### 3.5 退出登录
+
+**接口**: `POST /auth/logout`
+
+**描述**: 用户退出登录,使当前Token失效
+
+**请求头**: `Authorization: Bearer {token}`
+
+**成功响应** (200):
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "退出成功"
+}
+```
+
+**错误响应**:
+- 401: Token无效
+
+**说明**:
+- 退出登录后,当前Token将被加入黑名单立即失效
+- 用户需要重新登录获取新Token
+
+---
+
+### 3.6 刷新Token
 
 **接口**: `POST /auth/refresh`
 
@@ -143,7 +222,7 @@
 
 ---
 
-### 3.4 验证秘钥
+### 3.7 验证秘钥
 
 **接口**: `GET /auth/verify-key`
 
@@ -648,10 +727,30 @@
 
 ## 10. 接口调用示例
 
-### 10.1 用户注册并获取Token
+### 10.1 发送验证码并注册
 
 ```bash
-# 1. 注册
+# 1. 发送验证码
+curl -X GET "http://localhost:8080/api/auth/register?to=user@example.com"
+
+# 响应:
+# {
+#   "code": 200,
+#   "message": "操作成功",
+#   "data": null
+# }
+
+# 2. 验证码校验(可选,注册时会自动校验)
+curl -X GET "http://localhost:8080/api/auth/verify?email=user@example.com&code=123456"
+
+# 响应:
+# {
+#   "code": 200,
+#   "message": "验证成功",
+#   "data": null
+# }
+
+# 3. 注册
 curl -X POST http://localhost:8080/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{
@@ -670,7 +769,7 @@ curl -X POST http://localhost:8080/api/auth/register \
 #   }
 # }
 
-# 2. 登录获取Token
+# 4. 登录获取Token
 curl -X POST http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{
@@ -685,6 +784,17 @@ curl -X POST http://localhost:8080/api/auth/login \
 #     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
 #     ...
 #   }
+# }
+
+# 5. 退出登录
+curl -X POST http://localhost:8080/api/auth/logout \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+# 响应:
+# {
+#   "success": true,
+#   "code": 200,
+#   "message": "退出成功"
 # }
 ```
 
@@ -835,7 +945,7 @@ setInterval(() => {
 
 ### 13.2 版本管理
 
-- **当前版本**: v1.0
+- **当前版本**: v1.1
 - **版本控制**: URL中包含版本号,如 `/api/v1/...`
 - **兼容性**: 保持向下兼容
 
@@ -843,4 +953,5 @@ setInterval(() => {
 
 | 日期 | 版本 | 更新内容 |
 |------|------|----------|
+| 2026-07-13 | v1.1 | 新增验证码发送接口(3.1)、验证码校验接口(3.2)、退出登录接口(3.5) |
 | 2026-07-12 | v1.0 | 初始版本,定义所有基础接口 |

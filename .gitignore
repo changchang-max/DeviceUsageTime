@@ -19,3 +19,7 @@ client/__pycache__/
 
 # 开发者随笔日记
 diary/
+
+# 屏蔽env文件
+.env*
+!.env.example

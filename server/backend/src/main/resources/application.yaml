@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: backend
+  # email配置
+  mail:
+    host: smtp.qq.com
+    port: 465
+    username: ${EMAIL_SENDER}
+    password: ${EMAIL_PASSWORD} #填授权码
+    protocol: smtp
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
+  # redis配置
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+      timeout: 5s
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/deviceusagetime?useSSL=false&serverTimezone=Asia/Shanghai
+    username: ${MYSQL_USER}
+    password: ${MYSQL_PASSWORD}
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: top.primordialcode.backend.entity
+
+logging:
+  file:
+    name: logs/backend.log
