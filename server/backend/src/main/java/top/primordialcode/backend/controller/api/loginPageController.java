@@ -4,22 +4,19 @@ import jakarta.mail.MessagingException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import top.primordialcode.backend.common.Result;
+import top.primordialcode.backend.dto.LoginDTO;
+import top.primordialcode.backend.service.Login.LoginServer;
 import top.primordialcode.backend.service.Register.MailServer;
 
 import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
-public class email_controller {
+public class loginPage_controller {
     @Autowired
     private MailServer mailServer;
-
-    @GetMapping("/test")
-    public Result test(String to) throws MessagingException {
-
-        mailServer.send_email(to);
-        return Result.success();
-    }
+    @Autowired
+    private LoginServer loginServer;
 
     // 生成并发送验证码
     @GetMapping("/sendcode")
@@ -35,5 +32,12 @@ public class email_controller {
         String code = map.get("code");
 
         return mailServer.register(user_email,user_password,code);
+    }
+
+    // 登录
+    @PostMapping("/login")
+    public Result login(@RequestBody LoginDTO loginDTO){
+        String token = loginServer.login(loginDTO);
+        return Result.success("登录成功",token);
     }
 }
