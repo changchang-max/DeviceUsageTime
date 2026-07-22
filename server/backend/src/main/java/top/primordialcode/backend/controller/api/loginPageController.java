@@ -12,7 +12,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
-public class loginPage_controller {
+public class loginPageController {
     @Autowired
     private MailServer mailServer;
     @Autowired

@@ -52,4 +52,11 @@ public interface UserAuthMapper {
      * @return true：存在 flase：不存在
      */
     boolean existsByEmail(String user_email);
+
+    /**
+     * 根据用户邮箱查询密码
+     * @param user_email 要查询的目标邮箱
+     * @return 用户实体类，其中仅有user_email与user_password属性可用
+     */
+    UserAuthEntity selectUserInfo(String user_email);
 }

@@ -8,12 +8,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.stereotype.Service;
 import top.primordialcode.backend.common.Result;
 import top.primordialcode.backend.entity.UserAuthEntity;
 import top.primordialcode.backend.mapper.UserAuthMapper;
-import top.primordialcode.backend.model.UserRegister;
+import top.primordialcode.backend.dto.UserRegisterDTO;
 import top.primordialcode.backend.service.Register.impl.MailServerImpl;
 import top.primordialcode.backend.utils.GenKeyUtil;
 
@@ -231,12 +230,12 @@ public class MailServer implements MailServerImpl {
             verifyCodeServer.deletecode(sys_code);
 
             // 创建一个UserRegister实体，用于返回注册信息
-            UserRegister userRegister = new UserRegister();
-            userRegister.setEmail(user_email);
-            userRegister.setUser_key(user_key);
-            userRegister.setCreatedAt(Instant.now());
+            UserRegisterDTO userRegisterDTO = new UserRegisterDTO();
+            userRegisterDTO.setEmail(user_email);
+            userRegisterDTO.setUser_key(user_key);
+            userRegisterDTO.setCreatedAt(Instant.now());
 
-            return new Result(201,"注册成功",userRegister);
+            return new Result(201,"注册成功", userRegisterDTO);
         }catch (Exception e){
             log.error("用户："+user_email+"注册失败");
             return new Result(500,"注册失败",null);

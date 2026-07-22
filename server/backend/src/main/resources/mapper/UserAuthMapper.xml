@@ -43,4 +43,11 @@
         )
     </select>
 
+    <select id="selectUserInfo"
+            resultType="UserAuthEntity">
+        select user_email,user_password
+        from user_auth
+        where user_email = #{user_email}
+    </select>
+
 </mapper>

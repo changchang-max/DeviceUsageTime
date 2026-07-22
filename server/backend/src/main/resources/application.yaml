@@ -35,3 +35,7 @@ mybatis:
 logging:
   file:
     name: logs/backend.log
+
+jwt:
+  secret: MyJwtSecretKeyForDeviceUsageTime2026
+  expiration: 86400000
