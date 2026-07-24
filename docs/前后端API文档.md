@@ -13,7 +13,7 @@
 
 ### 2.2 认证方式
 
-#### 2.2.1 Token认证
+#### 2.2.1 Token认证✅️
 - **适用场景**: 已登录用户
 - **请求头**: `Authorization: Bearer {token}`
 - **获取方式**: 登录接口返回
@@ -23,7 +23,7 @@
 - **请求参数**: `?key={secretKey}`
 - **获取方式**: 由被查看用户提供
 
-### 2.3 通用响应格式
+### 2.3 通用响应格式✅️
 
 ```json
 {
@@ -33,7 +33,7 @@
 }
 ```
 
-### 2.4 错误响应格式
+### 2.4 错误响应格式✅️
 
 ```json
 {
@@ -45,7 +45,7 @@
 
 ## 3. 用户认证接口
 
-### 3.1 发送验证码
+### 3.1 发送验证码✅️
 
 **接口**: `GET /auth/sendcode`
 
@@ -76,43 +76,19 @@
 
 ---
 
-### 3.2 验证码校验
 
-**接口**: `GET /auth/verify`
-
-**描述**: 校验邮箱验证码是否正确
-
-**请求参数**:
-- `email`: 邮箱地址,必填
-- `code`: 验证码,必填
-
-**请求示例**: `GET /auth/verify?email=user@example.com&code=123456`
-
-**成功响应** (200):
-```json
-{
-  "code": 200,
-  "message": "验证成功",
-  "data": null
-}
-```
-
-**错误响应**:
-- 400: 验证码错误或已过期
-
----
-
-### 3.3 用户注册
+### 3.2 用户注册✅️
 
 **接口**: `POST /auth/register`
 
-**描述**: 用户通过邮箱注册新账号(需先调用验证码接口获取验证码)
+**描述**: 用户通过邮箱注册新账号（同时填写验证码）
 
 **请求参数**:
 ```json
 {
   "email": "user@example.com",     // 必填,邮箱格式
   "password": "Password123"        // 必填,至少8位,包含字母和数字
+  "code": "123456"                 // 必填，固定为6位
 }
 ```
 
@@ -135,7 +111,7 @@
 
 ---
 
-### 3.4 用户登录
+### 3.3 用户登录✅️
 
 **接口**: `POST /auth/login`
 
@@ -152,14 +128,10 @@
 **成功响应** (200):
 ```json
 {
-  "success": true,
   "code": 200,
   "message": "登录成功",
   "data": {
-    "userId": "12345",
-    "email": "user@example.com",
     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "expiresIn": 604800          // Token有效期(秒),7天
   }
 }
 ```
@@ -170,7 +142,7 @@
 
 ---
 
-### 3.5 退出登录
+### 3.5 退出登录✅️
 
 **接口**: `POST /auth/logout`
 
@@ -181,9 +153,9 @@
 **成功响应** (200):
 ```json
 {
-  "success": true,
   "code": 200,
   "message": "退出成功"
+  "data": null
 }
 ```
 
@@ -194,31 +166,6 @@
 - 退出登录后,当前Token将被加入黑名单立即失效
 - 用户需要重新登录获取新Token
 
----
-
-### 3.6 刷新Token
-
-**接口**: `POST /auth/refresh`
-
-**描述**: 刷新Token有效期
-
-**请求头**: `Authorization: Bearer {token}`
-
-**成功响应** (200):
-```json
-{
-  "success": true,
-  "code": 200,
-  "message": "Token刷新成功",
-  "data": {
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "expiresIn": 604800
-  }
-}
-```
-
-**错误响应**:
-- 401: Token无效或已过期
 
 ---
 
@@ -233,7 +180,6 @@
 **成功响应** (200):
 ```json
 {
-  "success": true,
   "code": 200,
   "message": "秘钥有效",
   "data": {
@@ -259,7 +205,6 @@
 **成功响应** (200):
 ```json
 {
-  "success": true,
   "code": 200,
   "data": {
     "userId": "12345",
@@ -331,7 +276,7 @@
 **请求参数**:
 ```json
 {
-  "userId": "12345",
+  "userEmail": "1234567@qq.com",
   "timestamp": "2026-07-12T10:30:45Z",
   "applications": [                   // 仅包含有变化的应用
     {
@@ -358,7 +303,6 @@
 **成功响应** (200):
 ```json
 {
-  "success": true,
   "code": 200,
   "message": "数据上传成功",
   "data": {

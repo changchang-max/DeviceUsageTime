@@ -4,11 +4,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import top.primordialcode.backend.common.Result;
 import top.primordialcode.backend.dto.LoginDTO;
 import top.primordialcode.backend.entity.UserAuthEntity;
 import top.primordialcode.backend.mapper.UserAuthMapper;
 import top.primordialcode.backend.service.Login.impl.LoginServerImpl;
+import top.primordialcode.backend.service.Redis.RedisStringServer;
 import top.primordialcode.backend.utils.JwtUtil;
+
+import java.time.Duration;
 
 @Slf4j
 @Service
@@ -19,6 +23,8 @@ public class LoginServer implements LoginServerImpl {
     PasswordEncoder passwordEncoder;
     @Autowired
     JwtUtil jwtUtil;
+    @Autowired
+    RedisStringServer redisStringServer;
 
     /**
      * 用户登录，检验密码是否正确，检验成功则返回token记住用户
@@ -45,11 +51,28 @@ public class LoginServer implements LoginServerImpl {
 
     /**
      * 根据用户token删除对应信息以此实现退出登录
-     * @param token 用户token
+     *
+     * @return 状态信息
      */
     @Override
-    public void logout(String token) {
-        //检查用户token是否存在。若存在则删除。若存在，则删除，并记录日志。若不存在，则记录日志。
-        return;
+    public Result logout(String token) {
+        if (token == null
+                || !token.startsWith("Bearer ")
+                || token.length() <= 7) {
+
+            return Result.error(400, "用户未登录", null);
+        }
+        String jwtToken = token.substring(7);
+
+        // 获取过期时间戳
+        long expiration = jwtUtil.getExpiration(jwtToken);
+        long ttl = expiration - System.currentTimeMillis();
+
+        if (ttl>0){
+            //将token添加至Redis黑名单中
+            redisStringServer.set("jwt:blacklist:"+jwtToken,"logout", Duration.ofMillis(ttl));
+        }
+
+        return Result.success("退出登录成功");
     }
 }

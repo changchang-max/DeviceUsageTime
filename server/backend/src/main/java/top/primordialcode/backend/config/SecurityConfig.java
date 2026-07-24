@@ -16,6 +16,7 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
+    //编写构造方法，让Spring识别到需要JwtAuthenticationFilter对象时自动注入进来
     public SecurityConfig(
             JwtAuthenticationFilter jwtAuthenticationFilter
     ){
@@ -24,7 +25,8 @@ public class SecurityConfig {
 
     }
 
-
+    /*这是一个Spring Security Filter Chain（Spring Security 过滤器链）
+    * 它通过 Servlet Filter 机制，在请求到达 Controller 之前拦截 HTTP 请求，然后判断请求是否允许继续执行。*/
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http

@@ -21,7 +21,11 @@ public class Result {
     public static Result success(String message,Object data) {
         return new Result(200,message,data);
     }
+    public static Result success(String message) {
+        return new Result(200,message,null);
+    }
     public static Result error(int code,String message,Object data){
         return new Result(code,message,data);
     }
+
 }

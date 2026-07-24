@@ -26,4 +26,10 @@ public class RedisStringServer implements RedisStringServerImpl {
     public void del(String key) {
         stringRedisTemplate.delete(key);
     }
+
+    @Override
+    public boolean existKey(String key) {
+        return stringRedisTemplate.hasKey(key);
+    }
+
 }

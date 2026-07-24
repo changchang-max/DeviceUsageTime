@@ -4,6 +4,7 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import top.primordialcode.backend.entity.UserAuthEntity;
@@ -12,6 +13,7 @@ import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
+@Slf4j
 @Component
 public class JwtUtil {
     // 设置秘钥
@@ -38,7 +40,7 @@ public class JwtUtil {
      * @return 类型为String的token
      */
     public String generate(String user_email){
-        System.out.println("生成jwt，用户邮箱为："+user_email);
+        log.info("生成jwt，用户邮箱为："+user_email);
         String token = Jwts.builder()
                 //设置主题,一般以主键作为主题，因为唯一
                 .subject(user_email)
@@ -60,8 +62,6 @@ public class JwtUtil {
      * @return 根据token解析出来的用户邮箱(String)
      */
     public String parse(String token){
-        System.out.println("接收的token:"+token);
-
         // 使用 JWT 解析器解析传入的 token
         // token 一般是前端请求携带的 Authorization: Bearer xxx 中的 xxx 部分
         Claims claims =
@@ -106,5 +106,20 @@ public class JwtUtil {
         String subject = claims.getSubject();
         System.out.println("验证后得到的主题："+subject);
         return subject;
+    }
+
+    /**
+     * 根据token得到token的过期时间
+     * @param token jwtToken
+     * @return 过期时间的毫秒时间戳。单位是毫秒
+     */
+    public long getExpiration(String token) {
+        return Jwts.parser()
+                .verifyWith(SECRET_KEY)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .getExpiration()
+                .getTime();
     }
 }
