@@ -24,9 +24,14 @@ spring:
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/deviceusagetime?useSSL=false&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://localhost:3306/deviceusagetime?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: ${MYSQL_USER}
     password: ${MYSQL_PASSWORD}
+
+  security:
+    user:
+      name: disabled
+      password: disabled
 
 mybatis:
   mapper-locations: classpath:mapper/*.xml
@@ -35,7 +40,9 @@ mybatis:
 logging:
   file:
     name: logs/backend.log
+  level:
+    org.springframework.security: DEBUG
 
 jwt:
-  secret: MyJwtSecretKeyForDeviceUsageTime2026
-  expiration: 86400000
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION}

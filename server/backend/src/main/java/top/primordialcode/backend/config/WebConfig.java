@@ -13,5 +13,10 @@ public class WebConfig implements WebMvcConfigurer {
                 "/api",
                 global_api -> global_api.getPackageName().startsWith("top.primordialcode.backend.controller.api")
         );
+        // controller.index包自动添加/index
+        configurer.addPathPrefix(
+                "/index",
+                global_api -> global_api.getPackageName().startsWith("top.primordialcode.backend.controller.index")
+        );
     }
 }
