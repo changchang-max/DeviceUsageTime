@@ -338,7 +338,6 @@
 **成功响应** (200):
 ```json
 {
-  "success": true,
   "code": 200,
   "data": {
     "userId": "12345",
