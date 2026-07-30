@@ -52,7 +52,34 @@ public class JwtUtil {
                 .signWith(SECRET_KEY)
                 // 编码生成最终数据
                 .compact();
-        System.out.println(token);
+        System.out.println("生成jwt，用户邮箱为："+user_email+"token为："+token);
+        return token;
+    }
+
+    /**
+     * 根据用户邮箱和角色，生成带角色信息的token
+     * @param user_email 用户邮箱
+     * @param role 用户角色(如"user"或"visitor")
+     * @return 类型为String的token
+     */
+    public String generateWithRole(String user_email, String role){
+        log.info("生成jwt，用户邮箱为："+user_email+"，角色为："+role);
+        String token = Jwts.builder()
+                //设置主题,一般以主键作为主题，因为唯一
+                .subject(user_email)
+                
+                //添加角色信息到claims中
+                .claim("role", role)
+
+                //设置过期时间
+                .expiration(new Date(
+                        System.currentTimeMillis()+EXPRIATION))
+                // 将Jwt签名。因为Jwt不是加密，而是签名
+                .signWith(SECRET_KEY)
+                // 编码生成最终数据
+                .compact();
+        //println在开发环境下用于排查
+        System.out.println("生成jwt，用户邮箱为："+user_email+"token为："+token);
         return token;
     }
 
@@ -121,5 +148,20 @@ public class JwtUtil {
                 .getPayload()
                 .getExpiration()
                 .getTime();
+    }
+
+    /**
+     * 从token中解析出角色信息
+     * @param token jwtToken
+     * @return 角色字符串,如果token中没有角色信息则返回null
+     */
+    public String getRole(String token) {
+        Claims claims = Jwts.parser()
+                .verifyWith(SECRET_KEY)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+        
+        return claims.get("role", String.class);
     }
 }

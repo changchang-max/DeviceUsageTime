@@ -12,4 +12,6 @@ public class UserAuthEntity {
 
     private String user_key;
 
+    private String user_name;
+
 }

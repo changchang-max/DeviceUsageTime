@@ -42,21 +42,32 @@ public class SecurityConfig {
                 //配置接口权限
                 .authorizeHttpRequests(
                         auth -> auth
-                                //登录注册不需要JWT
-                                //匹配相应的http请求
+                                // ========== 公开接口(无需认证) ==========
                                 .requestMatchers(
                                         "/api/auth/login",
                                         "/api/auth/register",
                                         "/api/auth/sendCode",
+                                        "/api/auth/verify-key",
                                         "/ws/**"
-                                )
-                                // 允许所有人访问
-                                .permitAll()
+                                ).permitAll()
 
-                                //其他接口需要认证
+                                // ========== ROLE_USER角色专属接口 ==========
+                                .requestMatchers(
+                                        "/api/auth/logout",
+                                        "/api/data/**",
+                                        "/index/home",
+                                        "/api/user/**"
+                                ).hasAuthority("ROLE_USER")
 
-                                .anyRequest() // 前面没有匹配到的所有请求。
-                                .authenticated() // 要求当前请求已经通过身份认证。
+                                // ========== ROLE_VISITOR角色专属接口 ==========
+                                // 当前ROLE_VISITOR角色暂无专属接口
+                                
+                                // ========== 多角色共享接口 ==========
+                                // 如果将来有需要ROLE_USER和ROLE_VISITOR都能访问的接口,在此配置
+                                // 例如: .requestMatchers("/api/public/**").hasAnyAuthority("ROLE_USER", "ROLE_VISITOR")
+
+                                // ========== 其他未匹配的接口 ==========
+                                .anyRequest().denyAll()
                 )
 
 

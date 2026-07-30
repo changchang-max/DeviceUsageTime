@@ -45,8 +45,8 @@ public class LoginServer implements LoginServerImpl {
             throw new RuntimeException("密码错误");
         }
 
-        // 密码正确时，允许登录，给浏览器返回一个tokken
-        return jwtUtil.generate(loginDTO.getUser_email());
+        // 密码正确时，允许登录，给浏览器返回一个带ROLE_USER角色的token
+        return jwtUtil.generateWithRole(loginDTO.getUser_email(), "ROLE_USER");
     }
 
     /**

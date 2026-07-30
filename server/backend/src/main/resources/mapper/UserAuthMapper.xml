@@ -50,4 +50,11 @@
         where user_email = #{user_email}
     </select>
 
+    <select id="selectByKey"
+            resultType="UserAuthEntity">
+        select user_email,user_name
+        from user_auth
+        where user_key = #{user_key}
+    </select>
+
 </mapper>

@@ -70,13 +70,28 @@ public class JwtAuthenticationFilter
             try {
                 //解析JWT
                 String email = jwtUtil.parse(token);
+                
+                //从JWT中获取角色信息
+                String role = jwtUtil.getRole(token);
+                
+                //根据角色创建权限列表
+                List<SimpleGrantedAuthority> authorities;
+                if (role != null && !role.isEmpty()) {
+                    // 如果有角色信息，则直接使用(不进行大小写转换)
+                    authorities = Collections.singletonList(
+                            new SimpleGrantedAuthority(role)
+                    );
+                } else {
+                    // 如果没有角色信息，则为空列表(兼容旧token)
+                    authorities = Collections.emptyList();
+                }
+                
                 //创建认证对象
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(
                                 email,//标识用户是谁
                                 null,//用户凭证，一般设为null
-
-                                Collections.emptyList()//为该用户授予的角色。因为该文章的功能不需要分角色，所以传入了空的列表
+                                authorities//为该用户授予的角色权限
                         );
 
                 //保存用户信息

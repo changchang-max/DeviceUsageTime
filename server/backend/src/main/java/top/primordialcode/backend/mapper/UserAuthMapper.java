@@ -59,4 +59,11 @@ public interface UserAuthMapper {
      * @return 用户实体类，其中仅有user_email与user_password属性可用
      */
     UserAuthEntity selectUserInfo(String user_email);
+
+    /**
+     * 根据用户秘钥查询用户信息
+     * @param user_key 要查询的秘钥
+     * @return 用户实体类,包含user_email和user_name
+     */
+    UserAuthEntity selectByKey(String user_key);
 }

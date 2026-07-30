@@ -183,8 +183,7 @@
   "code": 200,
   "message": "秘钥有效",
   "data": {
-    "userId": "12345",
-    "userName": "张三"          // 可选,用户昵称
+    "userName": "张三"         
   }
 }
 ```
@@ -472,15 +471,15 @@
 
 ### 7.1 WebSocket连接
 
-**连接URL**: `ws://localhost:8080/ws` 或 `wss://api.example.com/ws`
+**连接URL**: `ws://localhost:8080/ws/device` 或 `wss://api.example.com/ws/device`
 
 **连接参数**:
 - Token认证: `?token={token}`
 - 或秘钥认证: `?key={secretKey}`
 
 **连接示例**: 
-- `ws://localhost:8080/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
-- `ws://localhost:8080/ws?key=aB3$xY9zK2mN7pQ`
+- `ws://localhost:8080/ws/device?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
+- `ws://localhost:8080/ws/device?key=aB3$xY9zK2mN7pQ`
 
 ### 7.2 订阅用户数据
 
@@ -783,7 +782,7 @@ curl -X GET "http://localhost:8080/api/data/history?date=2026-07-01&key=aB3\$xY9
 
 ```javascript
 // 前端Vue3代码示例
-const ws = new WebSocket('ws://localhost:8080/ws?key=aB3$xY9zK2mN7pQ')
+const ws = new WebSocket('ws://localhost:8080/ws/device?key=aB3$xY9zK2mN7pQ')
 
 ws.onopen = () => {
   console.log('WebSocket已连接')
