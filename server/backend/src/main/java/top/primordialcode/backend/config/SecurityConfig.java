@@ -47,7 +47,8 @@ public class SecurityConfig {
                                 .requestMatchers(
                                         "/api/auth/login",
                                         "/api/auth/register",
-                                        "/api/auth/sendCode"
+                                        "/api/auth/sendCode",
+                                        "/ws/**"
                                 )
                                 // 允许所有人访问
                                 .permitAll()

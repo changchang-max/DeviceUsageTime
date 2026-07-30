@@ -9,6 +9,7 @@ import top.primordialcode.backend.dto.DataUpload.DataUploadMainDTO;
 import top.primordialcode.backend.dto.DataUpload.RedisSaveOtherDataDTO;
 import top.primordialcode.backend.dto.DataUpload.StatisticsDTO;
 import top.primordialcode.backend.service.Redis.RedisDataUploadServer;
+import top.primordialcode.backend.service.WebSocket.DeviceWebSocketHandler;
 import top.primordialcode.backend.utils.JwtTokenUtil;
 
 
@@ -21,6 +22,8 @@ public class DataUploadServer {
     JwtTokenUtil jwtTokenUtil;
     @Autowired
     RedisDataUploadServer redisDataUploadServer;
+    @Autowired
+    DeviceWebSocketHandler handler;
 
     public Result receive(String Authorization, DataUploadMainDTO data){
         //获取data中的数据，分类存入Redis
@@ -42,6 +45,13 @@ public class DataUploadServer {
             redisDataUploadServer.updateStatistics(userEmail,statistics);
         } catch (JsonProcessingException e) {
             throw new RuntimeException("JSON序列化失败，可能是原始信息有误。详细异常："+e);
+        }
+
+        // 发布给指定用户（使用了秘钥的浏览器用户）
+        try {
+            handler.sendToUser(userEmail,data);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
         return Result.success();
     }
