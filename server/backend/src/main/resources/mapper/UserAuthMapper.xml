@@ -12,8 +12,8 @@
     </select>
 
     <insert id="insert">
-        insert into user_auth(user_email,user_password,user_key)
-        values(#{user_email},#{user_password},#{user_key})
+        insert into user_auth(user_email,user_password,user_key,created_at)
+        values(#{user_email},#{user_password},#{user_key},#{created_at})
     </insert>
 
     <delete id="deleteByEmail">
@@ -56,5 +56,11 @@
         from user_auth
         where user_key = #{user_key}
     </select>
+
+    <update id="updateLastLoginAt">
+        update user_auth
+        set last_login_at = #{last_login_at}
+        where user_email = #{email}
+    </update>
 
 </mapper>

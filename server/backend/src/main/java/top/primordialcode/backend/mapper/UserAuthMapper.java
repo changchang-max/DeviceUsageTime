@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 import top.primordialcode.backend.entity.UserAuthEntity;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 
@@ -66,4 +67,12 @@ public interface UserAuthMapper {
      * @return 用户实体类,包含user_email和user_name
      */
     UserAuthEntity selectByKey(String user_key);
+
+    /**
+     * 更新用户的最后登录时间
+     * @param email 要更新的目标用户邮箱
+     * @param last_login_at 最后登录时间
+     * @return 受影响的行数
+     */
+    int updateLastLoginAt(@Param("email") String email, @Param("last_login_at") Instant last_login_at);
 }

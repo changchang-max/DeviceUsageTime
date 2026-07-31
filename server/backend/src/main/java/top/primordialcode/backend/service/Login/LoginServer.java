@@ -13,6 +13,7 @@ import top.primordialcode.backend.service.Redis.RedisStringServer;
 import top.primordialcode.backend.utils.JwtUtil;
 
 import java.time.Duration;
+import java.time.Instant;
 
 @Slf4j
 @Service
@@ -45,7 +46,12 @@ public class LoginServer implements LoginServerImpl {
             throw new RuntimeException("密码错误");
         }
 
-        // 密码正确时，允许登录，给浏览器返回一个带ROLE_USER角色的token
+        // 密码正确时，更新last_login_at字段为当前时间
+        Instant lastLoginAt = Instant.now();
+        user.setLast_login_at(lastLoginAt);
+        userAuthMapper.updateLastLoginAt(loginDTO.getUser_email(), lastLoginAt);
+
+        // 允许登录，给浏览器返回一个带ROLE_USER角色的token
         return jwtUtil.generateWithRole(loginDTO.getUser_email(), "ROLE_USER");
     }
 

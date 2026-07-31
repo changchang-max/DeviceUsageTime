@@ -213,11 +213,15 @@ public class MailServer implements MailServerImpl {
         // 生成32位的随机秘钥
         String user_key = GenKeyUtil.generateKey(32);
 
+        // 获取当前时间
+        Instant createdAt = Instant.now();
+
         // 创建实体对象,将数据存入数据库
         UserAuthEntity userAuthEntity = new UserAuthEntity();
         userAuthEntity.setUser_email(user_email);
         userAuthEntity.setUser_password(encodePassword);
         userAuthEntity.setUser_key(user_key);
+        userAuthEntity.setCreated_at(createdAt);
 
 
 

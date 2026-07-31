@@ -169,7 +169,7 @@
 
 ---
 
-### 3.7 验证秘钥
+### 3.7 验证秘钥✅️
 
 **接口**: `GET /auth/verify-key`
 
@@ -206,12 +206,11 @@
 {
   "code": 200,
   "data": {
-    "userId": "12345",
     "email": "user@example.com",
     "secretKey": "aB3$xY9zK2mN7pQ",
+  }
     "createdAt": "2026-01-01T00:00:00Z",
     "lastLoginAt": "2026-07-12T10:30:45Z"
-  }
 }
 ```
 
