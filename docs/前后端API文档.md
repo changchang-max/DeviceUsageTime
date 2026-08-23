@@ -193,7 +193,7 @@
 
 ## 4. 用户管理接口
 
-### 4.1 获取用户信息
+### 4.1 获取用户信息✅️
 
 **接口**: `GET /user/profile`
 
@@ -227,7 +227,6 @@
 **成功响应** (200):
 ```json
 {
-  "success": true,
   "code": 200,
   "message": "秘钥已重新生成",
   "data": {
@@ -252,7 +251,6 @@
 **成功响应** (200):
 ```json
 {
-  "success": true,
   "code": 200,
   "message": "秘钥已作废"
 }
@@ -388,7 +386,6 @@
 **成功响应** (200):
 ```json
 {
-  "success": true,
   "code": 200,
   "data": {
     "date": "2026-07-01",
@@ -447,7 +444,6 @@
 **成功响应** (200):
 ```json
 {
-  "success": true,
   "code": 200,
   "data": {
     "yearMonth": "2026-07",
@@ -701,7 +697,6 @@ curl -X POST http://localhost:8080/api/auth/register \
 
 # 响应:
 # {
-#   "success": true,
 #   "code": 201,
 #   "data": {
 #     "userId": "12345",
@@ -720,7 +715,7 @@ curl -X POST http://localhost:8080/api/auth/login \
 
 # 响应:
 # {
-#   "success": true,
+#   "code": 200,
 #   "data": {
 #     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
 #     ...
@@ -733,7 +728,6 @@ curl -X POST http://localhost:8080/api/auth/logout \
 
 # 响应:
 # {
-#   "success": true,
 #   "code": 200,
 #   "message": "退出成功"
 # }
@@ -836,7 +830,6 @@ setInterval(() => {
 **响应格式**:
 ```json
 {
-  "success": false,
   "code": 429,
   "message": "请求过于频繁,请稍后再试",
   "retryAfter": 60             // 多少秒后可重试
