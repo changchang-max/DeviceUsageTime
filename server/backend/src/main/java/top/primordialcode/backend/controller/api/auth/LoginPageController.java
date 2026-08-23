@@ -19,7 +19,7 @@ public class LoginPageController {
     private LoginServer loginServer;
 
     // 生成并发送验证码
-    @GetMapping("/sendcode")
+    @GetMapping("/sendCode")
     public Result sendVerifiCode(String to) throws MessagingException{
         return mailServer.send_email(to);
     }

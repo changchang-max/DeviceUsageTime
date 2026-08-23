@@ -75,4 +75,11 @@ public interface UserAuthMapper {
      * @return 受影响的行数
      */
     int updateLastLoginAt(@Param("email") String email, @Param("last_login_at") Instant last_login_at);
+
+    /**
+     * 根据用户邮箱查询用户档案信息(不包含密码)
+     * @param user_email 要查询的目标邮箱
+     * @return 用户实体类，包含除密码外的所有信息
+     */
+    UserAuthEntity selectProfileByEmail(String user_email);
 }
