@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: backend-test
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:testdb
+    username: sa
+    password: 
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  security:
+    user:
+      name: disabled
+      password: disabled
+
+jwt:
+  secret: test-secret-key-for-testing-purposes-only
+  expiration: 86400000
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: top.primordialcode.backend.entity

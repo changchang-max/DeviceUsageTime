@@ -1,15 +1,20 @@
 package top.primordialcode.backend.dto.DataUpload;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 @Data
 public class ApplicationDTO {
-
+    //要求字段不能是 null、不能是空字符串 ""，也不能只包含空白字符。
+    @NotBlank(message = "应用名称不能为空")
     private String name;
 
     private String windowTitle;
 
+    @NotNull(message = "持续时间不能为空")
     private Long duration;
 
+    @NotNull(message = "活跃状态不能为空")
     private Boolean isActive;
 }

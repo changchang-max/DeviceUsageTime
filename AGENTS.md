@@ -273,7 +273,3 @@ Controller传递给Service的复杂参数应封装为DTO,位于 `dto` 包,可包
     .anyRequest().denyAll()
 )
 ```
-
-## 5. 代码验收标准
-
-写功能前走 TDD：先写失败测试，再写实现。

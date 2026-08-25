@@ -1,6 +1,7 @@
 package top.primordialcode.backend.controller.api.auth;
 
 import jakarta.mail.MessagingException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import top.primordialcode.backend.common.Result;
@@ -10,6 +11,7 @@ import top.primordialcode.backend.service.Register.MailServer;
 
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/auth")
 public class LoginPageController {
@@ -37,7 +39,13 @@ public class LoginPageController {
     // 登录
     @PostMapping("/login")
     public Result login(@RequestBody LoginDTO loginDTO){
-        String token = loginServer.login(loginDTO);
+        String token = null;
+        try {
+            token = loginServer.login(loginDTO);
+        } catch (RuntimeException e) {
+            log.warn("用户不存在",e);
+            return Result.error(400,"用户不存在",null);
+        }
         return Result.success("登录成功",token);
     }
 }
