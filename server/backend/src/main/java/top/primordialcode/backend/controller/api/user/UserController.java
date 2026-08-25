@@ -77,4 +77,27 @@ public class UserController {
             return Result.error(500, "重新生成秘钥失败", null);
         }
     }
+
+    /**
+     * 作废用户秘钥
+     * @return 操作结果
+     */
+    @PostMapping("/revoke-key")
+    public Result revokeKey() {
+        // 从SecurityContext获取当前认证用户的邮箱
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String email = (String) authentication.getPrincipal();
+        
+        log.info("用户请求作废秘钥，邮箱：{}", email);
+        
+        try {
+            // 调用服务层作废秘钥
+            userService.revokeSecretKey(email);
+            
+            return Result.success("秘钥已作废", null);
+        } catch (RuntimeException e) {
+            log.error("作废秘钥失败：{}", e.getMessage());
+            return Result.error(500, "作废秘钥失败", null);
+        }
+    }
 }

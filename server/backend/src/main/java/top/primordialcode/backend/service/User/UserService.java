@@ -61,4 +61,29 @@ public class UserService {
         log.info("秘钥更新成功，邮箱：{}", email);
         return newKey;
     }
+
+    /**
+     * 作废用户秘钥
+     * @param email 用户邮箱
+     */
+    public void revokeSecretKey(String email) {
+        log.info("作废秘钥，邮箱：{}", email);
+        
+        // 检查用户是否存在
+        boolean exists = userAuthMapper.existsByEmail(email);
+        if (!exists) {
+            log.warn("用户不存在，邮箱：{}", email);
+            throw new RuntimeException("用户不存在");
+        }
+        
+        // 将秘钥设置为null
+        int affectedRows = userAuthMapper.revokeKey(email);
+        
+        if (affectedRows == 0) {
+            log.error("作废秘钥失败，邮箱：{}", email);
+            throw new RuntimeException("作废秘钥失败");
+        }
+        
+        log.info("秘钥作废成功，邮箱：{}", email);
+    }
 }

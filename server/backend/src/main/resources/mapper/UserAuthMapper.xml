@@ -70,4 +70,10 @@
         where user_email = #{user_email}
     </select>
 
+    <update id="revokeKey">
+        update user_auth
+        set user_key = null
+        where user_email = #{email}
+    </update>
+
 </mapper>

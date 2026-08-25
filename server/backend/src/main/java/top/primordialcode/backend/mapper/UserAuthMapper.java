@@ -82,4 +82,11 @@ public interface UserAuthMapper {
      * @return 用户实体类，包含除密码外的所有信息
      */
     UserAuthEntity selectProfileByEmail(String user_email);
+
+    /**
+     * 作废用户秘钥(将user_key设置为null)
+     * @param email 要作废秘钥的目标用户邮箱
+     * @return 受影响的行数
+     */
+    int revokeKey(@Param("email") String email);
 }
