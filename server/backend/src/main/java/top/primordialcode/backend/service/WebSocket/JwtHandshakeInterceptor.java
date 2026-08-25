@@ -8,6 +8,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.server.HandshakeInterceptor;
 import top.primordialcode.backend.utils.JwtUtil;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 
 import java.net.URI;
 import java.util.Map;
@@ -56,9 +58,17 @@ public class JwtHandshakeInterceptor
             attributes.put("email", email);
 
             return true;
-        }catch(Exception e){
-            log.warn("token可能已过期");
-            log.error("JwtHandshakeInterceptor:",e);
+        }
+        catch(ExpiredJwtException e){
+            log.warn("WebSocket握手失败，JWT token已过期: {}", e.getMessage());
+            return false;
+        }
+        catch(JwtException e){
+            log.warn("WebSocket握手失败，JWT token验证失败: {}", e.getMessage());
+            return false;
+        }
+        catch(Exception e){
+            log.error("WebSocket握手异常:", e);
             return false;
         }
     }

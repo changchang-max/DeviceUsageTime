@@ -12,6 +12,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import top.primordialcode.backend.service.Redis.RedisStringServer;
 import top.primordialcode.backend.utils.JwtUtil;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
@@ -112,8 +114,24 @@ public class JwtAuthenticationFilter
                         "当前权限：" + authentication.getAuthorities()
                 );
             }
+            catch(ExpiredJwtException e){
+                log.warn("JWT token已过期: {}", e.getMessage());
+                //设置返回值
+                response.setStatus(
+                        HttpServletResponse.SC_UNAUTHORIZED
+                );
+                return;
+            }
+            catch(JwtException e){
+                log.warn("JWT token验证失败: {}", e.getMessage());
+                //设置返回值
+                response.setStatus(
+                        HttpServletResponse.SC_UNAUTHORIZED
+                );
+                return;
+            }
             catch(Exception e){
-                log.error("Jwt鉴权报错：",e);
+                log.error("JWT鉴权未知异常:", e);
 
                 //设置返回值
                 response.setStatus(
