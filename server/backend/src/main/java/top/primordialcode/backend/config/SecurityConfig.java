@@ -48,13 +48,15 @@ public class SecurityConfig {
                                         "/api/auth/register",
                                         "/api/auth/sendCode",
                                         "/api/auth/verify-key",
-                                        "/ws/**"
+                                        "/ws/**",
+                                        // 数据查询接口支持秘钥认证(无token)，在Controller/Service层手动校验身份
+                                        "/api/data/realtime"
                                 ).permitAll()
 
                                 // ========== ROLE_USER角色专属接口 ==========
                                 .requestMatchers(
                                         "/api/auth/logout",
-                                        "/api/data/**",
+                                        "/api/data/upload",
                                         "/index/home",
                                         "/api/user/**"
                                 ).hasAuthority("ROLE_USER")
