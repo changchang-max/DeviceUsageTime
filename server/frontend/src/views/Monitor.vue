@@ -31,7 +31,8 @@
             <el-icon v-else color="#f56c6c">
               <CircleClose />
             </el-icon>
-            <span>{{ connectionStatus }}</span>
+            <span v-if="wsStore.error" class="error-text">{{ wsStore.error }}</span>
+            <span v-else>{{ connectionStatus }}</span>
           </div>
         </div>
         
@@ -89,7 +90,7 @@ import PieChart from '@/components/PieChart.vue'
 import BarChart from '@/components/BarChart.vue'
 import StatsCard from '@/components/StatsCard.vue'
 import { SuccessFilled, Loading, CircleClose } from '@element-plus/icons-vue'
-import type { RealtimeUpdateMessage } from '@/types/websocket'
+import type { WebSocketMessage } from '@/types/websocket'
 
 const route = useRoute()
 const dataStore = useDataStore()
@@ -152,45 +153,52 @@ const handleDateChange = async (date: string) => {
   }
 }
 
-const setupWebSocket = () => {
-  if (!userId.value) return
-  
-  const ws = wsStore.getWebSocket()
-  if (ws) {
-    ws.onmessage = (event) => {
-      const message: RealtimeUpdateMessage = JSON.parse(event.data)
-      
-      if (message.type === 'realtime_update' && isRealtime.value) {
-        dataStore.updateRealtimeData(message.data as any)
-      }
-    }
+const handleWsMessage = (message: WebSocketMessage) => {
+  if (message.type === 'realtime_update' && isRealtime.value) {
+    // 合并推送的实时数据(推送仅含applications/statistics，保留原有userId等信息)
+    const merged = {
+      ...(dataStore.realtimeData || {}),
+      userId: message.userId,
+      timestamp: message.timestamp,
+      applications: message.data?.applications || [],
+      statistics: message.data?.statistics
+    } as any
+    dataStore.updateRealtimeData(merged)
+  } else if (message.type === 'error') {
+    console.error('WebSocket错误:', message.code, message.message)
   }
 }
 
 onMounted(async () => {
-  // 获取userId和secretKey
-  userId.value = route.params.userId as string || userStore.userInfo?.userId || ''
+  const authToken = userStore.token || undefined
+
+  // 已登录但尚未获取用户信息时先拉取(用于获取邮箱作为订阅标识)
+  if (authToken && !userStore.userInfo) {
+    await userStore.fetchUserInfo()
+  }
+
+  // 获取userId(本系统中为用户邮箱)和secretKey
+  userId.value = (route.params.userId as string) || userStore.userInfo?.email || ''
   secretKey.value = route.query.key as string || ''
-  
+  const authKey = secretKey.value || undefined
+
   // 获取当前月份有数据的日期
   const yearMonth = new Date().toISOString().slice(0, 7)
-  await dataStore.fetchDataDates(yearMonth, secretKey.value)
-  
+  await dataStore.fetchDataDates(yearMonth, authKey)
+
   // 获取实时数据
-  await dataStore.fetchRealtimeData(secretKey.value)
-  
-  // 连接WebSocket
-  if (userId.value) {
-    wsStore.connect(
-      userId.value,
-      userStore.token || undefined,
-      secretKey.value || undefined
-    )
-    setupWebSocket()
+  await dataStore.fetchRealtimeData(authKey)
+
+  // 连接WebSocket(登录用户用Token，秘钥查看者用秘钥)。
+  // 秘钥查看者不知道被查看用户标识，但仍建立连接，服务端会自动订阅秘钥持有者
+  if (userId.value || authToken || authKey) {
+    wsStore.connect(userId.value, authToken, authKey)
+    wsStore.setMessageHandler(handleWsMessage)
   }
 })
 
 onUnmounted(() => {
+  wsStore.setMessageHandler(null)
   wsStore.disconnect()
 })
 
@@ -260,6 +268,11 @@ watch(() => selectedDate.value, (newDate) => {
   gap: 8px;
   color: #606266;
   font-size: 14px;
+}
+
+.connection-status .error-text {
+  color: #f56c6c;
+  font-size: 13px;
 }
 
 .charts-section {

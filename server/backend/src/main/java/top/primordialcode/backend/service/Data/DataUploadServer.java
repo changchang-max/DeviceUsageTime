@@ -13,6 +13,7 @@ import top.primordialcode.backend.service.WebSocket.DeviceWebSocketHandler;
 import top.primordialcode.backend.utils.JwtTokenUtil;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 
 @Slf4j
@@ -74,12 +75,33 @@ public class DataUploadServer {
             log.error("历史数据归档失败: " + e.getMessage(), e);
         }
 
-        // 发布给指定用户（使用了秘钥的浏览器用户）
+        // 推送给所有订阅该用户的查看者(协议7.4)
+        // 推送Redis中的完整实时快照: 所有应用的累计数据 + 统计数据 + 最新时间戳
         try {
-            handler.sendToUser(userEmail, data);
+            List<ApplicationDTO> latestApplications =
+                    redisDataUploadServer.getApplications(userEmail);
+            StatisticsDTO latestStatistics =
+                    redisDataUploadServer.getStatistics(userEmail);
+            RedisSaveOtherDataDTO latestOtherData =
+                    redisDataUploadServer.getOtherData(userEmail);
+
+            Instant latestTimestamp =
+                    (latestOtherData != null && latestOtherData.getTimestamp() != null)
+                            ? latestOtherData.getTimestamp()
+                            : timestamp;
+
+            handler.pushRealtimeUpdate(
+                    userEmail,
+                    latestTimestamp,
+                    // 无应用数据时推空数组，避免客户端解析null报错
+                    latestApplications != null
+                            ? latestApplications
+                            : Collections.emptyList(),
+                    latestStatistics
+            );
         } catch (Exception e) {
             // WebSocket推送失败不应该影响数据存储，只记录日志
-            log.error("WebSocket推送失败: " + e.getMessage());
+            log.error("WebSocket推送失败: " + e.getMessage(), e);
         }
     }
 }

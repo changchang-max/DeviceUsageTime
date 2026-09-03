@@ -1,4 +1,4 @@
-import { Application, Statistics } from './data'
+import type { Application, Statistics } from './data'
 
 // WebSocket消息类型
 export type WebSocketMessageType =

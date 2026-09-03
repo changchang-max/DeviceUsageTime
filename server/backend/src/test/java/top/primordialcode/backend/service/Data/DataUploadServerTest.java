@@ -80,7 +80,7 @@ class DataUploadServerTest {
         verify(redisDataUploadServer, times(1)).updateApplications(eq("test@example.com"), anyList());
         verify(redisDataUploadServer, times(1)).updateStatistics(eq("test@example.com"), any(StatisticsDTO.class));
         verify(dataArchiveServer, times(1)).archive(eq("test@example.com"), any(Instant.class), anyList(), any(StatisticsDTO.class));
-        verify(handler, times(1)).sendToUser(eq("test@example.com"), eq(testData));
+        verify(handler, times(1)).pushRealtimeUpdate(eq("test@example.com"), any(Instant.class), anyList(), any());
     }
 
     @Test
@@ -146,11 +146,11 @@ class DataUploadServerTest {
     void testReceiveWithWebSocketFailure() throws Exception {
         when(jwtTokenUtil.getSubject(validToken)).thenReturn("test@example.com");
         doThrow(new RuntimeException("WebSocket error"))
-                .when(handler).sendToUser(anyString(), any());
+                .when(handler).pushRealtimeUpdate(anyString(), any(), any(), any());
 
         assertDoesNotThrow(() -> dataUploadServer.receive(validToken, testData));
 
         verify(redisDataUploadServer, times(1)).updateOtherData(anyString(), any());
-        verify(handler, times(1)).sendToUser(anyString(), any());
+        verify(handler, times(1)).pushRealtimeUpdate(anyString(), any(), any(), any());
     }
 }

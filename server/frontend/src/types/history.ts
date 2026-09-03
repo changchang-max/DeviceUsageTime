@@ -1,4 +1,4 @@
-import { HistoryApplication, Statistics } from './data'
+import type { HistoryApplication, Statistics } from './data'
 
 // 历史数据响应类型
 export interface HistoryData {

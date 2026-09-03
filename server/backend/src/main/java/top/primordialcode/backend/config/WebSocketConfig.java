@@ -25,7 +25,9 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
 
     /**
-     * 向 Spring WebSocket 注册一个连接入口 /ws/device，并且在建立连接前执行 JWT 拦截认证。
+     * 向 Spring WebSocket 注册一个连接入口 /ws/device，
+     * 并且在建立连接前执行 Token/秘钥 认证(见 JwtHandshakeInterceptor)。
+     * 连接协议详见 docs/前后端API文档.md 第7章。
      * @param registry SpringBoot提供的WebSocket注册中心，一个保存「URL路径 → WebSocket处理器」映射关系的容器。
      */
     @Override

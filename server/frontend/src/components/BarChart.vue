@@ -57,7 +57,7 @@ const chartOptions = computed<ChartOptions<'bar'>>(() => {
       tooltip: {
         callbacks: {
           label: (context) => {
-            return `时长: ${formatDuration(context.parsed.x)}`
+            return `时长: ${formatDuration(context.parsed.x ?? 0)}`
           }
         }
       }
