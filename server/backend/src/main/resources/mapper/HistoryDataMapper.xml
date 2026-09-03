@@ -99,4 +99,14 @@
           and stat_date = #{stat_date}
     </update>
 
+    <select id="selectDateIndexesInRange"
+            resultType="DataDateIndexEntity">
+        select id, user_email, stat_date, last_active_app, created_at
+        from data_date_index
+        where user_email = #{user_email}
+          and stat_date &gt;= #{start_date}
+          and stat_date &lt;= #{end_date}
+        order by stat_date asc
+    </select>
+
 </mapper>

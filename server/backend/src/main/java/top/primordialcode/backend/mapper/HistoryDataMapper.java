@@ -86,6 +86,16 @@ public interface HistoryDataMapper {
                                         @Param("stat_date") LocalDate stat_date);
 
     /**
+     * 查询某用户某个月份范围内(含首尾)有数据记录的日期索引，按日期升序
+     * @param start_date 月份第一天
+     * @param end_date 月份最后一天
+     * @return 无记录时返回空列表
+     */
+    List<DataDateIndexEntity> selectDateIndexesInRange(@Param("user_email") String user_email,
+                                                       @Param("start_date") LocalDate start_date,
+                                                       @Param("end_date") LocalDate end_date);
+
+    /**
      * 更新某用户某天索引中的最近前台应用
      */
     int updateLastActiveApp(@Param("user_email") String user_email,

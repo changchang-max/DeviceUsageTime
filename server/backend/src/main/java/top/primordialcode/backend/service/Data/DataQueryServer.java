@@ -10,6 +10,7 @@ import top.primordialcode.backend.dto.DataUpload.StatisticsDTO;
 import top.primordialcode.backend.entity.AppUsageRecordEntity;
 import top.primordialcode.backend.entity.AppWindowTitleEntity;
 import top.primordialcode.backend.entity.DailyStatisticsEntity;
+import top.primordialcode.backend.entity.DataDateIndexEntity;
 import top.primordialcode.backend.entity.UserAuthEntity;
 import top.primordialcode.backend.exception.DataNotFoundException;
 import top.primordialcode.backend.exception.UserNotFoundException;
@@ -17,12 +18,14 @@ import top.primordialcode.backend.mapper.HistoryDataMapper;
 import top.primordialcode.backend.mapper.UserAuthMapper;
 import top.primordialcode.backend.service.Redis.RedisDataUploadServer;
 import top.primordialcode.backend.utils.JwtTokenUtil;
+import top.primordialcode.backend.vo.data.DataDatesVO;
 import top.primordialcode.backend.vo.data.HistoryApplicationVO;
 import top.primordialcode.backend.vo.data.HistoryDataVO;
 import top.primordialcode.backend.vo.data.RealtimeDataVO;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -164,6 +167,46 @@ public class DataQueryServer {
     }
 
     /**
+     * 获取某个月份内有数据记录的日期列表(基于data_date_index日期索引)
+     * @param authorization Authorization请求头(可选，Bearer token)
+     * @param key 用户秘钥(可选)
+     * @param yearMonthStr 年月(YYYY-MM)
+     * @return 有数据日期列表VO
+     */
+    public DataDatesVO getDataDates(String authorization, String key, String yearMonthStr) {
+        // 解析用户身份(Token认证或秘钥认证)
+        String userEmail = resolveUserEmail(authorization, key);
+
+        // 校验用户是否存在
+        if (!userAuthMapper.existsByEmail(userEmail)) {
+            log.warn("用户不存在，邮箱：{}", userEmail);
+            throw new UserNotFoundException("用户不存在");
+        }
+
+        // 校验年月格式并计算该月日期范围
+        YearMonth yearMonth = parseYearMonth(yearMonthStr);
+        LocalDate startDate = yearMonth.atDay(1);
+        LocalDate endDate = yearMonth.atEndOfMonth();
+
+        // 查询该月内有数据记录的日期索引(按日期升序)
+        List<DataDateIndexEntity> dateIndexes =
+                historyDataMapper.selectDateIndexesInRange(userEmail, startDate, endDate);
+
+        // 组装VO
+        List<String> dates = new ArrayList<>();
+        if (dateIndexes != null) {
+            for (DataDateIndexEntity dateIndex : dateIndexes) {
+                dates.add(dateIndex.getStat_date().toString());
+            }
+        }
+
+        DataDatesVO vo = new DataDatesVO();
+        vo.setYearMonth(yearMonth.toString());
+        vo.setDates(dates);
+        return vo;
+    }
+
+    /**
      * 将每日统计数据实体转换为VO(缺省字段补0)
      */
     private StatisticsDTO toStatisticsVO(DailyStatisticsEntity entity) {
@@ -193,6 +236,22 @@ public class DataQueryServer {
             return LocalDate.parse(dateStr);
         } catch (DateTimeParseException e) {
             throw new IllegalArgumentException("日期格式错误");
+        }
+    }
+
+    /**
+     * 校验年月参数，必须是合法的 YYYY-MM
+     * @param yearMonthStr 年月字符串
+     * @return 解析后的年月
+     */
+    private YearMonth parseYearMonth(String yearMonthStr) {
+        if (yearMonthStr == null || !yearMonthStr.matches("\\d{4}-\\d{2}")) {
+            throw new IllegalArgumentException("年月格式错误");
+        }
+        try {
+            return YearMonth.parse(yearMonthStr);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("年月格式错误");
         }
     }
 
