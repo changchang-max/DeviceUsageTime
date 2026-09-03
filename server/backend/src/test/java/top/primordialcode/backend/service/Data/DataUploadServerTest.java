@@ -36,6 +36,9 @@ class DataUploadServerTest {
     @Mock
     private DeviceWebSocketHandler handler;
 
+    @Mock
+    private DataArchiveServer dataArchiveServer;
+
     @InjectMocks
     private DataUploadServer dataUploadServer;
 
@@ -76,12 +79,13 @@ class DataUploadServerTest {
         verify(redisDataUploadServer, times(1)).updateOtherData(eq("test@example.com"), any(RedisSaveOtherDataDTO.class));
         verify(redisDataUploadServer, times(1)).updateApplications(eq("test@example.com"), anyList());
         verify(redisDataUploadServer, times(1)).updateStatistics(eq("test@example.com"), any(StatisticsDTO.class));
+        verify(dataArchiveServer, times(1)).archive(eq("test@example.com"), any(Instant.class), anyList(), any(StatisticsDTO.class));
         verify(handler, times(1)).sendToUser(eq("test@example.com"), eq(testData));
     }
 
     @Test
     @DisplayName("Token验证失败抛出SecurityException")
-    void testReceiveWithInvalidToken() {
+    void testReceiveWithInvalidToken() throws Exception {
         when(jwtTokenUtil.getSubject(validToken)).thenThrow(new RuntimeException("Invalid token"));
 
         assertThrows(SecurityException.class, () -> dataUploadServer.receive(validToken, testData));
@@ -92,7 +96,7 @@ class DataUploadServerTest {
 
     @Test
     @DisplayName("timestamp为null抛出IllegalArgumentException")
-    void testReceiveWithNullTimestamp() {
+    void testReceiveWithNullTimestamp() throws Exception {
         when(jwtTokenUtil.getSubject(validToken)).thenReturn("test@example.com");
         testData.setTimestamp(null);
 

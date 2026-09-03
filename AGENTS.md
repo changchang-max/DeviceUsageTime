@@ -229,7 +229,9 @@ WebSocket 连接：`ws://localhost:8080/ws/device?token=xxx`
 
 ### 0.3 变量命名
 变量命名时尽量与entity数据库实体的变量名保持一致。如`UserAuthEntity.java`定义了`public String user_email`，则在定义相关变量时，不会命名冲突或产生歧义的情况下，也应命名为`user_email`，而非`email`，这样可以有效预防命名不统一导致后端无法接收前端请求和格式混乱的问题
----
+
+### 0.4 数据库相关规范
+数据表的注释用英文编写，尽量言简意赅
 
 ## 1. 角色与权限命名规范
 
@@ -275,3 +277,6 @@ Controller传递给Service的复杂参数应封装为DTO,位于 `dto` 包,可包
     .anyRequest().denyAll()
 )
 ```
+
+## 5. 代码编写规范
+在使用新的包时，先检查maven中是否已经含有该包的依赖。如已存在，则忽略。如不存在，则添加符合当前项目版本环境的maven依赖，并同步依赖到项目。

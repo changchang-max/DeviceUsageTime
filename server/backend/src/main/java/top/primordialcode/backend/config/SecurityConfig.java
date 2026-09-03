@@ -50,7 +50,8 @@ public class SecurityConfig {
                                         "/api/auth/verify-key",
                                         "/ws/**",
                                         // 数据查询接口支持秘钥认证(无token)，在Controller/Service层手动校验身份
-                                        "/api/data/realtime"
+                                        "/api/data/realtime",
+                                        "/api/data/history"
                                 ).permitAll()
 
                                 // ========== ROLE_USER角色专属接口 ==========

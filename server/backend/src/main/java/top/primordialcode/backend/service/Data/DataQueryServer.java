@@ -7,16 +7,28 @@ import org.springframework.stereotype.Service;
 import top.primordialcode.backend.dto.DataUpload.ApplicationDTO;
 import top.primordialcode.backend.dto.DataUpload.RedisSaveOtherDataDTO;
 import top.primordialcode.backend.dto.DataUpload.StatisticsDTO;
+import top.primordialcode.backend.entity.AppUsageRecordEntity;
+import top.primordialcode.backend.entity.AppWindowTitleEntity;
+import top.primordialcode.backend.entity.DailyStatisticsEntity;
 import top.primordialcode.backend.entity.UserAuthEntity;
+import top.primordialcode.backend.exception.DataNotFoundException;
 import top.primordialcode.backend.exception.UserNotFoundException;
+import top.primordialcode.backend.mapper.HistoryDataMapper;
 import top.primordialcode.backend.mapper.UserAuthMapper;
 import top.primordialcode.backend.service.Redis.RedisDataUploadServer;
 import top.primordialcode.backend.utils.JwtTokenUtil;
+import top.primordialcode.backend.vo.data.HistoryApplicationVO;
+import top.primordialcode.backend.vo.data.HistoryDataVO;
 import top.primordialcode.backend.vo.data.RealtimeDataVO;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -30,6 +42,9 @@ public class DataQueryServer {
 
     @Autowired
     JwtTokenUtil jwtTokenUtil;
+
+    @Autowired
+    HistoryDataMapper historyDataMapper;
 
     /**
      * 获取用户当前实时数据
@@ -73,6 +88,111 @@ public class DataQueryServer {
             return vo;
         } catch (JsonProcessingException e) {
             throw new RuntimeException("读取实时数据失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 获取指定日期的历史数据(MySQL冷数据)
+     * @param authorization Authorization请求头(可选，Bearer token)
+     * @param key 用户秘钥(可选)
+     * @param dateStr 日期(YYYY-MM-DD)
+     * @return 历史数据VO
+     */
+    public HistoryDataVO getHistoryData(String authorization, String key, String dateStr) {
+        // 解析用户身份(Token认证或秘钥认证)
+        String userEmail = resolveUserEmail(authorization, key);
+
+        // 校验用户是否存在
+        if (!userAuthMapper.existsByEmail(userEmail)) {
+            log.warn("用户不存在，邮箱：{}", userEmail);
+            throw new UserNotFoundException("用户不存在");
+        }
+
+        // 校验日期格式
+        LocalDate date = parseDate(dateStr);
+
+        // 查询冷数据
+        DailyStatisticsEntity statisticsEntity =
+                historyDataMapper.selectDailyStatistics(userEmail, date);
+        List<AppUsageRecordEntity> records =
+                historyDataMapper.selectAppRecords(userEmail, date);
+
+        // 无任何数据
+        if ((records == null || records.isEmpty()) && statisticsEntity == null) {
+            throw new DataNotFoundException("该日期无数据");
+        }
+
+        // 按应用聚合窗口标题
+        Map<Long, List<String>> titlesByRecordId = new HashMap<>();
+        if (records != null && !records.isEmpty()) {
+            List<Long> recordIds = new ArrayList<>();
+            for (AppUsageRecordEntity record : records) {
+                recordIds.add(record.getId());
+            }
+            List<AppWindowTitleEntity> windowTitles =
+                    historyDataMapper.selectTitlesByRecordIds(recordIds);
+            for (AppWindowTitleEntity title : windowTitles) {
+                titlesByRecordId
+                        .computeIfAbsent(title.getRecord_id(), k -> new ArrayList<>())
+                        .add(title.getWindow_title());
+            }
+        }
+
+        // 组装VO(应用记录已按总时长降序排列)
+        HistoryDataVO vo = new HistoryDataVO();
+        vo.setDate(date.toString());
+
+        List<HistoryApplicationVO> applicationVOs = new ArrayList<>();
+        if (records != null) {
+            for (AppUsageRecordEntity record : records) {
+                HistoryApplicationVO appVO = new HistoryApplicationVO();
+                appVO.setName(record.getApp_name());
+                appVO.setTotalDuration(
+                        record.getTotal_duration() != null ? record.getTotal_duration() : 0L);
+                appVO.setSessions(record.getSessions() != null ? record.getSessions() : 0L);
+                List<String> titles = titlesByRecordId.get(record.getId());
+                appVO.setWindowTitles(titles != null ? titles : new ArrayList<>());
+                applicationVOs.add(appVO);
+            }
+        }
+        vo.setApplications(applicationVOs);
+
+        // 统计：有应用数据但无统计行时返回全0，避免前端处理空值
+        vo.setStatistics(toStatisticsVO(statisticsEntity));
+
+        return vo;
+    }
+
+    /**
+     * 将每日统计数据实体转换为VO(缺省字段补0)
+     */
+    private StatisticsDTO toStatisticsVO(DailyStatisticsEntity entity) {
+        StatisticsDTO statistics = new StatisticsDTO();
+        statistics.setKeyboardCount(
+                entity != null && entity.getKeyboard_count() != null
+                        ? entity.getKeyboard_count() : 0L);
+        statistics.setMouseClickCount(
+                entity != null && entity.getMouse_click_count() != null
+                        ? entity.getMouse_click_count() : 0L);
+        statistics.setMouseDistance(
+                entity != null && entity.getMouse_distance() != null
+                        ? entity.getMouse_distance().doubleValue() : 0.0);
+        return statistics;
+    }
+
+    /**
+     * 校验日期参数，必须是合法的 YYYY-MM-DD
+     * @param dateStr 日期字符串
+     * @return 解析后的日期
+     */
+    private LocalDate parseDate(String dateStr) {
+        if (dateStr == null || !dateStr.matches("\\d{4}-\\d{2}-\\d{2}")) {
+            throw new IllegalArgumentException("日期格式错误");
+        }
+        try {
+            return LocalDate.parse(dateStr);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("日期格式错误");
         }
     }
 

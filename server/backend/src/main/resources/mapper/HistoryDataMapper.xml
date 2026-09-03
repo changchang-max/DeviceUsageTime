@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8" ?>
+
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="top.primordialcode.backend.mapper.HistoryDataMapper">
+
+    <!-- 每日统计 upsert：存在则覆盖为最新累计值(ON DUPLICATE KEY UPDATE) -->
+    <insert id="upsertDailyStatistics">
+        insert into daily_statistics(user_email, stat_date, keyboard_count, mouse_click_count, mouse_distance)
+        values (#{user_email}, #{stat_date}, #{keyboard_count}, #{mouse_click_count}, #{mouse_distance})
+        as new
+        on duplicate key update
+        keyboard_count = new.keyboard_count,
+        mouse_click_count = new.mouse_click_count,
+        mouse_distance = new.mouse_distance
+    </insert>
+
+    <select id="selectDailyStatistics"
+            resultType="DailyStatisticsEntity">
+        select id, user_email, stat_date, keyboard_count, mouse_click_count, mouse_distance,
+               scroll_distance, total_duration, created_at, updated_at
+        from daily_statistics
+        where user_email = #{user_email}
+          and stat_date = #{stat_date}
+    </select>
+
+    <select id="selectAppRecord"
+            resultType="AppUsageRecordEntity">
+        select id, user_email, stat_date, app_name, total_duration, sessions,
+               last_window_title, created_at, updated_at
+        from app_usage_records
+        where user_email = #{user_email}
+          and stat_date = #{stat_date}
+          and app_name = #{app_name}
+    </select>
+
+    <insert id="insertAppRecord"
+            useGeneratedKeys="true"
+            keyProperty="id"
+            keyColumn="id">
+        insert into app_usage_records(user_email, stat_date, app_name, total_duration, sessions, last_window_title)
+        values (#{user_email}, #{stat_date}, #{app_name}, #{total_duration}, #{sessions}, #{last_window_title})
+    </insert>
+
+    <update id="updateAppRecord">
+        update app_usage_records
+        set total_duration = #{total_duration},
+            sessions = sessions + #{add_sessions},
+            last_window_title = case when #{last_window_title} is null then last_window_title else #{last_window_title} end,
+            updated_at = current_timestamp
+        where id = #{id}
+    </update>
+
+    <select id="selectAppRecords"
+            resultType="AppUsageRecordEntity">
+        select id, user_email, stat_date, app_name, total_duration, sessions,
+               last_window_title, created_at, updated_at
+        from app_usage_records
+        where user_email = #{user_email}
+          and stat_date = #{stat_date}
+        order by total_duration desc, id asc
+    </select>
+
+    <select id="selectTitlesByRecordIds"
+            resultType="AppWindowTitleEntity">
+        select id, record_id, window_title, created_at
+        from app_window_titles
+        where record_id in
+        <foreach collection="record_ids" item="record_id" open="(" separator="," close=")">
+            #{record_id}
+        </foreach>
+        order by id asc
+    </select>
+
+    <insert id="insertIgnoreWindowTitle">
+        insert ignore into app_window_titles(record_id, window_title)
+        values (#{record_id}, #{window_title})
+    </insert>
+
+    <insert id="insertIgnoreDateIndex">
+        insert ignore into data_date_index(user_email, stat_date)
+        values (#{user_email}, #{stat_date})
+    </insert>
+
+    <select id="selectDateIndex"
+            resultType="DataDateIndexEntity">
+        select id, user_email, stat_date, last_active_app, created_at
+        from data_date_index
+        where user_email = #{user_email}
+          and stat_date = #{stat_date}
+    </select>
+
+    <update id="updateLastActiveApp">
+        update data_date_index
+        set last_active_app = #{last_active_app}
+        where user_email = #{user_email}
+          and stat_date = #{stat_date}
+    </update>
+
+</mapper>

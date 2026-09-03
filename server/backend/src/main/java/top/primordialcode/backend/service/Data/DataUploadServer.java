@@ -24,6 +24,8 @@ public class DataUploadServer {
     RedisDataUploadServer redisDataUploadServer;
     @Autowired
     DeviceWebSocketHandler handler;
+    @Autowired
+    DataArchiveServer dataArchiveServer;
 
     public void receive(String Authorization, DataUploadMainDTO data){
         // 验证Authorization并获取用户邮箱
@@ -63,6 +65,13 @@ public class DataUploadServer {
             }
         } catch (JsonProcessingException e) {
             throw new RuntimeException("JSON序列化失败: " + e.getMessage(), e);
+        }
+
+        // 归档到MySQL冷数据(按用户+日期聚合)，失败只记日志，不影响实时数据与推送
+        try {
+            dataArchiveServer.archive(userEmail, timestamp, applications, statistics);
+        } catch (Exception e) {
+            log.error("历史数据归档失败: " + e.getMessage(), e);
         }
 
         // 发布给指定用户（使用了秘钥的浏览器用户）
