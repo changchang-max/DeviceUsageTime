@@ -1,19 +1,19 @@
 import request from '@/utils/request'
-import type { ApiResponse, LoginRequest, RegisterRequest, User } from '@/types'
+import type { ApiResponse, LoginRequest, RegisterRequest, VerifyKeyData } from '@/types'
 
-// 发送验证码
+// 发送验证码(后端映射路径为 /auth/sendCode)
 export const sendCodeApi = (email: string) => {
-  return request.get<ApiResponse>(`/auth/sendcode?to=${email}`)
+  return request.get<ApiResponse>(`/auth/sendCode?to=${email}`)
 }
 
 // 用户注册
 export const registerApi = (data: RegisterRequest) => {
-  return request.post<ApiResponse<User>>('/auth/register', data)
+  return request.post<ApiResponse>('/auth/register', data)
 }
 
-// 用户登录
+// 用户登录(后端 data 直接返回 token 字符串)
 export const loginApi = (data: LoginRequest) => {
-  return request.post<ApiResponse<{ email: string; token: string; expiresIn: number }>>('/auth/login', data)
+  return request.post<ApiResponse<string>>('/auth/login', data)
 }
 
 // 退出登录
@@ -21,12 +21,7 @@ export const logoutApi = () => {
   return request.post<ApiResponse>('/auth/logout')
 }
 
-// 刷新Token
-export const refreshTokenApi = () => {
-  return request.post<ApiResponse<{ token: string; expiresIn: number }>>('/auth/refresh')
-}
-
-// 验证秘钥
+// 验证秘钥(后端返回 userName 与 ROLE_VISITOR 角色的 token)
 export const verifyKeyApi = (key: string) => {
-  return request.get<ApiResponse<{ userId: string; userName?: string }>>(`/auth/verify-key?key=${key}`)
+  return request.get<ApiResponse<VerifyKeyData>>(`/auth/verify-key?key=${key}`)
 }

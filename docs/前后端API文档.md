@@ -45,16 +45,18 @@
 
 ## 3. 用户认证接口
 
+> **说明**:认证接口(3.1~3.7)由后端直接返回 `Result`,HTTP 状态码固定为 200(框架级校验异常除外),业务结果以响应体中的 `code` 为准。
+
 ### 3.1 发送验证码✅️
 
-**接口**: `GET /auth/sendcode`
+**接口**: `GET /auth/sendCode`
 
 **描述**: 发送验证码到指定邮箱,用于注册或登录验证
 
 **请求参数**:
 - `to`: 目标邮箱地址,必填
 
-**请求示例**: `GET /auth/sendcode?to=user@example.com`
+**请求示例**: `GET /auth/sendCode?to=user@example.com`
 
 **成功响应** (200):
 ```json
@@ -70,12 +72,11 @@
 
 **说明**:
 - 验证码为6位数字
-- 验证码有效期为5分钟
+- 验证码保存于 Redis,有效期为5分钟
 - 验证码会发送到指定邮箱
 - 请勿将验证码泄露给他人
 
 ---
-
 
 ### 3.2 用户注册✅️
 
@@ -86,28 +87,28 @@
 **请求参数**:
 ```json
 {
-  "email": "user@example.com",     // 必填,邮箱格式
-  "password": "Password123"        // 必填,至少8位,包含字母和数字
-  "code": "123456"                 // 必填，固定为6位
+  "user_email": "user@example.com",    // 必填,邮箱格式(字段名与数据库实体 user_email 一致)
+  "user_password": "Password123",      // 必填,至少8位,包含字母和数字
+  "code": "123456"                     // 必填,固定为6位邮箱验证码
 }
 ```
 
-**成功响应** (201):
+**成功响应** (200,业务码 201):
 ```json
 {
   "code": 201,
   "message": "注册成功",
   "data": {
     "email": "user@example.com",
-    "user_key": "aB3$xY9zK2mN7pQ",  // 自动生成的秘钥
+    "user_key": "aB3$xY9zK2mN7pQcDeFgHiJkLmNoPqRsTuV",  // 自动生成的32位秘钥
     "createdAt": "2026-07-12T10:30:45Z"
   }
 }
 ```
 
 **错误响应**:
-- 400: 参数验证失败
-- 409: 邮箱已存在
+- 400: 验证码错误/不存在/已过期、邮箱已被注册
+- 500: 注册失败(数据库写入异常)
 
 ---
 
@@ -120,8 +121,8 @@
 **请求参数**:
 ```json
 {
-  "email": "user@example.com",
-  "password": "Password123"
+  "user_email": "user@example.com",
+  "user_password": "Password123"
 }
 ```
 
@@ -130,15 +131,12 @@
 {
   "code": 200,
   "message": "登录成功",
-  "data": {
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  }
+  "data": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."   // data 直接为 token 字符串
 }
 ```
 
 **错误响应**:
-- 400: 参数验证失败
-- 401: 邮箱或密码错误
+- 400: 邮箱或密码错误(提示"用户不存在")
 
 ---
 
@@ -154,18 +152,18 @@
 ```json
 {
   "code": 200,
-  "message": "退出成功"
+  "message": "退出登录成功",
   "data": null
 }
 ```
 
 **错误响应**:
-- 401: Token无效
+- 400: 请求头缺失或格式错误
+- 403: Token无效或已过期(无权限)
 
 **说明**:
-- 退出登录后,当前Token将被加入黑名单立即失效
+- 退出登录后,当前Token将被加入Redis黑名单立即失效
 - 用户需要重新登录获取新Token
-
 
 ---
 
@@ -173,7 +171,7 @@
 
 **接口**: `GET /auth/verify-key`
 
-**描述**: 验证秘钥有效性并返回用户ID
+**描述**: 验证秘钥有效性,并返回用户昵称与查看者(ROLE_VISITOR)角色的token
 
 **请求参数**: `?key={secretKey}`
 
@@ -183,13 +181,14 @@
   "code": 200,
   "message": "秘钥有效",
   "data": {
-    "userName": "张三"         
+    "userName": "张三",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."  // ROLE_VISITOR 角色token,可用于数据接口的Token认证
   }
 }
 ```
 
 **错误响应**:
-- 401: 秘钥无效或已作废
+- 401: 秘钥无效或已作废(业务码 401,HTTP状态仍为 200)
 
 ## 4. 用户管理接口
 
@@ -667,8 +666,8 @@
 ### 10.1 发送验证码并注册
 
 ```bash
-# 1. 发送验证码
-curl -X GET "http://localhost:8080/api/auth/register?to=user@example.com"
+# 1. 发送验证码(验证码发送至邮箱,后端存于Redis,5分钟内有效)
+curl -X GET "http://localhost:8080/api/auth/sendCode?to=user@example.com"
 
 # 响应:
 # {
@@ -677,59 +676,50 @@ curl -X GET "http://localhost:8080/api/auth/register?to=user@example.com"
 #   "data": null
 # }
 
-# 2. 验证码校验(可选,注册时会自动校验)
-curl -X GET "http://localhost:8080/api/auth/verify?email=user@example.com&code=123456"
-
-# 响应:
-# {
-#   "code": 200,
-#   "message": "验证成功",
-#   "data": null
-# }
-
-# 3. 注册
+# 2. 注册(请求字段与实体 user_email 保持一致)
 curl -X POST http://localhost:8080/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "user@example.com",
-    "password": "Password123"
+    "user_email": "user@example.com",
+    "user_password": "Password123",
+    "code": "123456"
   }'
 
 # 响应:
 # {
 #   "code": 201,
+#   "message": "注册成功",
 #   "data": {
-#     "userId": "12345",
-#     "secretKey": "aB3$xY9zK2mN7pQ",
-#     ...
+#     "email": "user@example.com",
+#     "user_key": "aB3$xY9zK2mN7pQcDeFgHiJkLmNoPqRsTuV",
+#     "createdAt": "2026-07-12T10:30:45Z"
 #   }
 # }
 
-# 4. 登录获取Token
+# 3. 登录获取Token(data 直接为 token 字符串)
 curl -X POST http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "user@example.com",
-    "password": "Password123"
+    "user_email": "user@example.com",
+    "user_password": "Password123"
   }'
 
 # 响应:
 # {
 #   "code": 200,
-#   "data": {
-#     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-#     ...
-#   }
+#   "message": "登录成功",
+#   "data": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 # }
 
-# 5. 退出登录
+# 4. 退出登录
 curl -X POST http://localhost:8080/api/auth/logout \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 
 # 响应:
 # {
 #   "code": 200,
-#   "message": "退出成功"
+#   "message": "退出登录成功",
+#   "data": null
 # }
 ```
 
@@ -879,7 +869,7 @@ setInterval(() => {
 
 ### 13.2 版本管理
 
-- **当前版本**: v1.1
+- **当前版本**: v1.2
 - **版本控制**: URL中包含版本号,如 `/api/v1/...`
 - **兼容性**: 保持向下兼容
 
@@ -887,5 +877,6 @@ setInterval(() => {
 
 | 日期 | 版本 | 更新内容 |
 |------|------|----------|
-| 2026-07-13 | v1.1 | 新增验证码发送接口(3.1)、验证码校验接口(3.2)、退出登录接口(3.5) |
+| 2026-09-05 | v1.2 | 认证接口(3.1~3.7)与后端实现对齐:发送验证码路径改为 `/auth/sendCode`;登录/注册请求字段改为 `user_email`/`user_password`;登录响应 `data` 直接为 token 字符串;验证秘钥返回 `userName` 与 ROLE_VISITOR 角色 token |
+| 2026-07-13 | v1.1 | 新增验证码发送接口(3.1)、退出登录接口(3.5) |
 | 2026-07-12 | v1.0 | 初始版本,定义所有基础接口 |
