@@ -1,5 +1,5 @@
 <template>
-  <div class="login-page" ref="pageRef" @mousemove="handleMouseMove">
+  <div class="auth-login-page" ref="pageRef" @mousemove="handleMouseMove">
     <!-- Canvas Background -->
     <canvas ref="canvasRef" class="canvas-bg"></canvas>
     
@@ -15,50 +15,85 @@
     <div class="cursor-dot" :style="{ left: mouseX + 'px', top: mouseY + 'px' }"></div>
     <div class="cursor-ring" :style="{ left: mouseX + 'px', top: mouseY + 'px', transform: `translate(-50%, -50%) scale(${isHoveringButton ? 1.5 : 1})` }"></div>
     
-    <!-- Main Container -->
-    <div class="main-container" ref="containerRef">
+    <!-- Login Container -->
+    <div class="login-container" ref="containerRef">
       <!-- Decorative Elements -->
       <div class="decoration-grid"></div>
       <div class="decoration-noise"></div>
       
+      <!-- Back Button -->
+      <button class="back-btn" @click="router.push('/login')" @mouseenter="isHoveringButton = true" @mouseleave="isHoveringButton = false">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>返回</span>
+      </button>
+      
       <!-- Header -->
-      <div class="main-header">
+      <div class="login-header">
         <h1 class="title">
           <span v-for="(char, index) in titleChars" :key="index" :style="{ animationDelay: `${index * 0.05}s` }">{{ char }}</span>
         </h1>
-        <p class="subtitle">输入秘钥查看设备使用数据</p>
+        <p class="subtitle">使用邮箱和密码登录您的账号</p>
       </div>
       
-      <!-- Key Input Section -->
-      <div class="key-input-section">
-        <div class="input-row">
+      <!-- Form -->
+      <el-form
+        ref="formRef"
+        :model="formData"
+        :rules="rules"
+        label-position="top"
+        size="large"
+        class="login-form"
+      >
+        <el-form-item label="邮箱" prop="email" class="form-item">
           <div class="input-wrapper">
             <el-input
-              ref="keyInputRef"
-              v-model="keyValue"
-              placeholder="请输入秘钥..."
+              v-model="formData.email"
+              placeholder="请输入邮箱"
               clearable
-              size="large"
               @focus="handleInputFocus"
               @blur="handleInputBlur"
-              @keyup.enter="handleVerifyKey"
             >
               <template #prefix>
-                <el-icon><Key /></el-icon>
+                <el-icon><Message /></el-icon>
               </template>
             </el-input>
             <div class="input-glow"></div>
           </div>
+        </el-form-item>
+        
+        <el-form-item label="密码" prop="password" class="form-item">
+          <div class="input-wrapper">
+            <el-input
+              v-model="formData.password"
+              type="password"
+              placeholder="请输入密码"
+              show-password
+              clearable
+              @focus="handleInputFocus"
+              @blur="handleInputBlur"
+              @keyup.enter="handleLogin"
+            >
+              <template #prefix>
+                <el-icon><Lock /></el-icon>
+              </template>
+            </el-input>
+            <div class="input-glow"></div>
+          </div>
+        </el-form-item>
+        
+        <el-form-item class="form-item">
           <button
             type="button"
-            class="access-btn"
+            class="login-btn"
             :class="{ 'is-loading': loading }"
-            :disabled="loading || !keyValue.trim()"
-            @click="handleVerifyKey"
+            :disabled="loading"
+            @click="handleLogin"
             @mouseenter="isHoveringButton = true"
             @mouseleave="isHoveringButton = false"
           >
-            <span class="btn-text">{{ loading ? '验证中...' : '访问' }}</span>
+            <span class="btn-text">{{ loading ? '登录中...' : '登录' }}</span>
             <span class="btn-shine"></span>
             <span class="btn-arrow">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -66,68 +101,63 @@
               </svg>
             </span>
           </button>
-        </div>
-      </div>
+        </el-form-item>
+      </el-form>
       
-      <!-- Divider -->
-      <div class="divider">
-        <span class="divider-line"></span>
-        <span class="divider-text">或</span>
-        <span class="divider-line"></span>
-      </div>
-      
-      <!-- Action Icons -->
-      <div class="action-icons">
-        <div 
-          class="icon-item"
-          @click="router.push('/auth/login')"
-          @mouseenter="isHoveringButton = true"
-          @mouseleave="isHoveringButton = false"
-        >
-          <div class="icon-circle">
-            <el-icon :size="28"><User /></el-icon>
-          </div>
-          <span class="icon-label">用户登录</span>
-        </div>
-        
-        <div 
-          class="icon-item"
-          @click="router.push('/register')"
-          @mouseenter="isHoveringButton = true"
-          @mouseleave="isHoveringButton = false"
-        >
-          <div class="icon-circle">
-            <el-icon :size="28"><UserFilled /></el-icon>
-          </div>
-          <span class="icon-label">注册账号</span>
-        </div>
+      <!-- Footer -->
+      <div class="footer-links">
+        <span>还没有账号?</span>
+        <button class="link-btn" @click="router.push('/register')" @mouseenter="isHoveringButton = true" @mouseleave="isHoveringButton = false">
+          立即注册
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { verifyKeyApi } from '@/api'
-import { ElMessage } from 'element-plus'
-import { Key, User, UserFilled } from '@element-plus/icons-vue'
+import { useUserStore } from '@/stores/user'
+import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import { Message, Lock } from '@element-plus/icons-vue'
 
 const router = useRouter()
+const userStore = useUserStore()
 
 // Refs
 const pageRef = ref<HTMLElement>()
 const containerRef = ref<HTMLElement>()
 const canvasRef = ref<HTMLCanvasElement>()
-const keyInputRef = ref()
+const formRef = ref<FormInstance>()
 
 // State
 const loading = ref(false)
 const mouseX = ref(0)
 const mouseY = ref(0)
 const isHoveringButton = ref(false)
-const titleChars = '设备使用时间追踪'.split('')
-const keyValue = ref('')
+const titleChars = '欢迎回来'.split('')
+
+// Form data
+const formData = reactive({
+  email: '',
+  password: ''
+})
+
+// Validation rules
+const rules: FormRules = {
+  email: [
+    { required: true, message: '请输入邮箱', trigger: 'blur' },
+    { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }
+  ],
+  password: [
+    { required: true, message: '请输入密码', trigger: 'blur' },
+    { min: 8, message: '密码至少8位', trigger: 'blur' }
+  ]
+}
 
 // Canvas animation
 let animationId: number
@@ -235,37 +265,29 @@ const handleInputBlur = (e: FocusEvent) => {
   }
 }
 
-// Verify key
-const handleVerifyKey = async () => {
-  if (!keyValue.value.trim()) {
-    ElMessage.warning('请输入秘钥')
-    return
-  }
+// Login
+const handleLogin = async () => {
+  if (!formRef.value) return
   
-  loading.value = true
-  try {
-    const res = await verifyKeyApi(keyValue.value.trim())
-    ElMessage.success('验证成功')
+  await formRef.value.validate(async (valid) => {
+    if (!valid) return
     
-    // 跳转到监控页面
-    router.push({
-      path: '/monitor',
-      query: { key: keyValue.value.trim() }
-    })
-  } catch (error: any) {
-    ElMessage.error(error.message || '秘钥无效或已失效')
-  } finally {
-    loading.value = false
-  }
+    loading.value = true
+    try {
+      await userStore.login(formData.email, formData.password)
+      ElMessage.success('登录成功')
+      router.push('/monitor')
+    } catch (error: any) {
+      ElMessage.error(error.message || '登录失败')
+    } finally {
+      loading.value = false
+    }
+  })
 }
 
 // Lifecycle
 onMounted(() => {
   initCanvas()
-  // Auto focus on input
-  nextTick(() => {
-    keyInputRef.value?.focus()
-  })
 })
 
 onUnmounted(() => {
@@ -277,7 +299,7 @@ onUnmounted(() => {
 
 <style scoped>
 /* Page Layout */
-.login-page {
+.auth-login-page {
   position: relative;
   min-height: 100vh;
   display: flex;
@@ -335,13 +357,13 @@ onUnmounted(() => {
   transition: transform 0.15s ease;
 }
 
-/* Main Container */
-.main-container {
+/* Login Container */
+.login-container {
   position: relative;
   z-index: 10;
   width: 100%;
-  max-width: 600px;
-  padding: 48px 56px;
+  max-width: 420px;
+  padding: 48px;
   background: rgba(255, 255, 255, 0.03);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -389,16 +411,49 @@ onUnmounted(() => {
   border-radius: 24px;
 }
 
+/* Back Button */
+.back-btn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 8px 16px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  cursor: none;
+  transition: all 0.3s ease;
+  z-index: 20;
+}
+
+.back-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.back-btn svg {
+  transition: transform 0.3s ease;
+}
+
+.back-btn:hover svg {
+  transform: translateX(-4px);
+}
+
 /* Header */
-.main-header {
+.login-header {
   text-align: center;
-  margin-bottom: 40px;
+  margin-bottom: 48px;
   position: relative;
 }
 
 .title {
   margin: 0 0 16px 0;
-  font-size: 38px;
+  font-size: 42px;
   font-weight: 700;
   letter-spacing: -0.02em;
   background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
@@ -437,29 +492,31 @@ onUnmounted(() => {
   }
 }
 
-/* Key Input Section */
-.key-input-section {
-  margin-bottom: 32px;
-  animation: sectionReveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
+/* Form */
+.login-form {
+  position: relative;
+}
+
+.form-item {
+  margin-bottom: 28px;
+  animation: formItemReveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   opacity: 0;
   transform: translateY(20px);
 }
 
-@keyframes sectionReveal {
+.form-item:nth-child(1) { animation-delay: 0.2s; }
+.form-item:nth-child(2) { animation-delay: 0.3s; }
+.form-item:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes formItemReveal {
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
 
-.input-row {
-  display: flex;
-  gap: 12px;
-  align-items: stretch;
-}
-
+/* Input Wrapper */
 .input-wrapper {
-  flex: 1;
   position: relative;
 }
 
@@ -489,7 +546,6 @@ onUnmounted(() => {
   box-shadow: none;
   padding: 12px 16px;
   transition: all 0.3s ease;
-  height: 52px;
 }
 
 :deep(.el-input__wrapper):hover {
@@ -512,15 +568,22 @@ onUnmounted(() => {
   color: rgba(255, 255, 255, 0.35);
 }
 
+:deep(.el-form-item__label) {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
 :deep(.el-icon) {
   color: rgba(255, 255, 255, 0.5);
 }
 
-/* Access Button */
-.access-btn {
+/* Login Button */
+.login-btn {
   position: relative;
+  width: 100%;
   height: 52px;
-  padding: 0 32px;
   background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
   border: none;
   border-radius: 12px;
@@ -531,30 +594,20 @@ onUnmounted(() => {
   cursor: none;
   overflow: hidden;
   transition: all 0.3s ease;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
 }
 
-.access-btn:hover:not(:disabled) {
+.login-btn:hover {
   transform: translateY(-2px);
   box-shadow: 
     0 10px 30px rgba(99, 102, 241, 0.3),
     0 0 20px rgba(99, 102, 241, 0.2);
 }
 
-.access-btn:active:not(:disabled) {
+.login-btn:active {
   transform: translateY(0);
 }
 
-.access-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.access-btn.is-loading {
+.login-btn.is-loading {
   pointer-events: none;
 }
 
@@ -573,140 +626,78 @@ onUnmounted(() => {
   transition: left 0.5s ease;
 }
 
-.access-btn:hover:not(:disabled) .btn-shine {
+.login-btn:hover .btn-shine {
   left: 100%;
 }
 
 .btn-arrow {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  align-items: center;
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%) translateX(-5px);
   opacity: 0;
-  transform: translateX(-5px);
   transition: all 0.3s ease;
 }
 
-.access-btn:hover:not(:disabled) .btn-arrow {
+.login-btn:hover .btn-arrow {
   opacity: 1;
-  transform: translateX(0);
+  transform: translateY(-50%) translateX(0);
 }
 
-/* Divider */
-.divider {
+/* Footer Links */
+.footer-links {
+  text-align: center;
+  margin-top: 32px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 32px;
-  animation: dividerReveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards;
+  justify-content: center;
+  gap: 8px;
+  animation: footerReveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.5s forwards;
   opacity: 0;
 }
 
-@keyframes dividerReveal {
+@keyframes footerReveal {
   to {
     opacity: 1;
   }
 }
 
-.divider-line {
-  flex: 1;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.divider-text {
-  color: rgba(255, 255, 255, 0.4);
+.link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: #a5b4fc;
   font-size: 14px;
   font-weight: 500;
-}
-
-/* Action Icons */
-.action-icons {
-  display: flex;
-  justify-content: center;
-  gap: 48px;
-  animation: iconsReveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.5s forwards;
-  opacity: 0;
-  transform: translateY(20px);
-}
-
-@keyframes iconsReveal {
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.icon-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
   cursor: none;
-  transition: transform 0.3s ease;
-}
-
-.icon-item:hover {
-  transform: translateY(-4px);
-}
-
-.icon-circle {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: rgba(99, 102, 241, 0.1);
-  border: 1px solid rgba(99, 102, 241, 0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #a5b4fc;
   transition: all 0.3s ease;
 }
 
-.icon-item:hover .icon-circle {
-  background: rgba(99, 102, 241, 0.2);
-  border-color: rgba(99, 102, 241, 0.5);
-  box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+.link-btn:hover {
   color: #c7d2fe;
 }
 
-.icon-label {
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 14px;
-  font-weight: 500;
-  transition: color 0.3s ease;
+.link-btn svg {
+  transition: transform 0.3s ease;
 }
 
-.icon-item:hover .icon-label {
-  color: rgba(255, 255, 255, 0.8);
+.link-btn:hover svg {
+  transform: translateX(4px);
 }
 
 /* Responsive */
 @media (max-width: 768px) {
-  .main-container {
+  .login-container {
     margin: 20px;
-    padding: 32px 24px;
+    padding: 32px;
   }
   
   .title {
-    font-size: 28px;
-  }
-  
-  .input-row {
-    flex-direction: column;
-  }
-  
-  .access-btn {
-    width: 100%;
-  }
-  
-  .action-icons {
-    gap: 32px;
-  }
-  
-  .icon-circle {
-    width: 56px;
-    height: 56px;
+    font-size: 32px;
   }
   
   .cursor-dot,
@@ -714,7 +705,7 @@ onUnmounted(() => {
     display: none;
   }
   
-  .login-page {
+  .auth-login-page {
     cursor: auto;
   }
 }
