@@ -3,7 +3,9 @@ import type { ApiResponse, LoginRequest, RegisterRequest, VerifyKeyData } from '
 
 // 发送验证码(后端映射路径为 /auth/sendCode)
 export const sendCodeApi = (email: string) => {
-  return request.get<ApiResponse>(`/auth/sendCode?to=${email}`)
+  return request.get<ApiResponse>('/auth/sendCode', {
+    params: { to: email }
+  })
 }
 
 // 用户注册
@@ -21,7 +23,9 @@ export const logoutApi = () => {
   return request.post<ApiResponse>('/auth/logout')
 }
 
-// 验证秘钥(后端返回 userName 与 ROLE_VISITOR 角色的 token)
+// 验证秘钥(后端返回 userName 与 ROLE_VISITOR 角色的 token; 秘钥可能含特殊字符,走 params 编码)
 export const verifyKeyApi = (key: string) => {
-  return request.get<ApiResponse<VerifyKeyData>>(`/auth/verify-key?key=${key}`)
+  return request.get<ApiResponse<VerifyKeyData>>('/auth/verify-key', {
+    params: { key }
+  })
 }

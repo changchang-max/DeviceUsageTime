@@ -15,9 +15,16 @@ const service: AxiosInstance = axios.create({
 // 请求拦截器
 service.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    // 秘钥认证请求(URL查询参数携带key)不附加Bearer Token，
+    // 避免后端优先按Token解析而忽略秘钥(秘钥可能含特殊字符，统一走axios params编码)
+    const useKeyAuth = Boolean(
+      (config.params as Record<string, unknown> | undefined)?.key ||
+        new URLSearchParams(config.url?.split('?')[1] || '').has('key')
+    )
+
     // 从localStorage获取token
     const token = localStorage.getItem('token')
-    if (token) {
+    if (token && !useKeyAuth) {
       config.headers.Authorization = `Bearer ${token}`
     }
     return config
@@ -31,15 +38,23 @@ service.interceptors.request.use(
 service.interceptors.response.use(
   (response) => {
     const res = response.data as ApiResponse
+    const config = response.config as InternalAxiosRequestConfig & { ignore404?: boolean }
 
-    // 如果返回的状态码为200,直接返回数据
+    // 如果返回的状态码为200/201,直接返回数据
     if (res.code === 200 || res.code === 201) {
+      return res as unknown as AxiosResponse
+    }
+
+    // 历史数据查询等场景: 404(该日期无数据)属正常空状态,不弹错误提示,原样返回让调用方清空展示
+    if (res.code === 404 && config.ignore404) {
       return res as unknown as AxiosResponse
     }
 
     // 其他状态码显示错误信息
     ElMessage.error(res.message || '请求失败')
-    return Promise.reject(new Error(res.message || '请求失败'))
+    const err = new Error(res.message || '请求失败') as Error & { code?: number }
+    err.code = res.code
+    return Promise.reject(err)
   },
   (error) => {
     // 处理HTTP错误
@@ -72,6 +87,13 @@ service.interceptors.response.use(
 )
 
 /**
+ * 扩展请求配置: ignore404 表示 404 业务码(如"该日期无数据")不作为错误提示
+ */
+export interface RequestConfig extends AxiosRequestConfig {
+  ignore404?: boolean
+}
+
+/**
  * 类型化请求客户端
  *
  * 由于响应拦截器直接返回了 ApiResponse(而非 AxiosResponse)，
@@ -79,11 +101,11 @@ service.interceptors.response.use(
  * 从而 res.data 直接是业务数据类型。
  */
 const request = {
-  get<T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    return service.get(url, config) as unknown as Promise<T>
+  get<T = unknown>(url: string, config?: RequestConfig): Promise<T> {
+    return service.get(url, config as AxiosRequestConfig) as unknown as Promise<T>
   },
-  post<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
-    return service.post(url, data, config) as unknown as Promise<T>
+  post<T = unknown>(url: string, data?: unknown, config?: RequestConfig): Promise<T> {
+    return service.post(url, data, config as AxiosRequestConfig) as unknown as Promise<T>
   }
 }
 

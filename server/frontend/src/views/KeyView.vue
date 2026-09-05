@@ -81,8 +81,8 @@ const handleVerify = async () => {
         path: '/monitor',
         query: { key: formData.key }
       })
-    } catch (error: any) {
-      ElMessage.error(error.message || '秘钥无效或已失效')
+    } catch {
+      // 错误提示已由请求拦截器统一弹出(如"秘钥无效或已失效")
     } finally {
       loading.value = false
     }

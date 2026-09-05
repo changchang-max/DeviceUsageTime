@@ -277,8 +277,8 @@ const handleLogin = async () => {
       await userStore.login(formData.email, formData.password)
       ElMessage.success('登录成功')
       router.push('/monitor')
-    } catch (error: any) {
-      ElMessage.error(error.message || '登录失败')
+    } catch {
+      // 错误提示已由请求拦截器统一弹出
     } finally {
       loading.value = false
     }

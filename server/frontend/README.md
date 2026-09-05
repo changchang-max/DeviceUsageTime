@@ -41,10 +41,6 @@ web/
 │   │   └── format.ts     # 格式化工具
 │   ├── App.vue           # 根组件
 │   └── main.ts           # 应用入口
-├── mock/                 # Mock数据
-│   ├── auth.ts
-│   ├── user.ts
-│   └── data.ts
 ├── public/               # 公共资源
 ├── index.html
 ├── package.json
@@ -56,6 +52,15 @@ web/
 ```
 
 ## 🚀 快速开始
+
+### 0. 启动后端(必需)
+
+前端所有接口均对接真实后端,请先启动 Spring Boot 后端(`http://localhost:8080`),并保证 MySQL、Redis 可用:
+
+```bash
+cd server/backend
+mvn spring-boot:run
+```
 
 ### 1. 安装依赖
 
@@ -70,7 +75,7 @@ npm install
 npm run dev
 ```
 
-应用将在 http://localhost:3000 启动
+应用将在 http://localhost:3000 启动,`/api` 与 `/ws` 请求由 Vite 自动代理到后端 8080。
 
 ### 3. 构建生产版本
 
@@ -117,15 +122,14 @@ npm run build
 - ✅ 秘钥验证
 - ✅ 只读权限
 
-## 📋 Mock数据
+## 🔌 后端对接
 
-开发模式下使用 vite-plugin-mock 提供Mock API:
+开发模式下通过 Vite 代理直接对接真实后端(Spring Boot,默认 `http://localhost:8080`):
 
-- **认证接口**: 发送验证码、注册、登录、退出
-- **用户接口**: 获取用户信息、管理秘钥
-- **数据接口**: 实时数据、历史数据、日期列表
-
-所有接口都有模拟响应,无需后端即可完整体验前端功能。
+- **REST API**: `/api/**` 由 Vite 代理转发到后端,支持 Token 认证(`Authorization: Bearer`)与秘钥认证(`?key=`)
+- **WebSocket**: `/ws/**` 由 Vite 代理转发到后端,用于实时数据推送
+- 认证/数据/用户等所有接口均需后端可用,不再使用 Mock 数据
+- 接口定义与响应结构详见仓库根目录 `docs/前后端API文档.md`
 
 ## 🔧 技术栈
 
@@ -137,7 +141,6 @@ npm run build
 - **图表**: Chart.js + vue-chartjs
 - **HTTP**: Axios
 - **构建**: Vite
-- **Mock**: vite-plugin-mock
 
 ## 🎨 页面路由
 
@@ -166,7 +169,7 @@ VITE_API_BASE_URL=https://api.example.com/api
 ### 添加新的API接口
 1. 在 `src/types/` 定义类型
 2. 在 `src/api/` 创建接口函数
-3. 在 `mock/` 添加Mock响应
+3. 由 Vite 代理转发到后端,确保后端已实现对应接口
 
 ### 添加新的页面
 1. 在 `src/views/` 创建页面组件
@@ -181,11 +184,8 @@ VITE_API_BASE_URL=https://api.example.com/api
 
 ## 🐛 调试技巧
 
-### 查看Mock数据
-打开浏览器控制台,Mock服务会输出验证码等信息:
-```
-[Mock] 验证码已发送到 user@example.com: 123456
-```
+### 查看接口请求
+打开浏览器控制台 → Network 面板,可查看 `/api/**` 请求与响应。请求错误提示由 `src/utils/request.ts` 统一弹出。
 
 ### WebSocket调试
 在控制台查看WebSocket连接状态:

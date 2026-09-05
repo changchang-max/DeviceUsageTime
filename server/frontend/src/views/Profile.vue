@@ -113,7 +113,8 @@ const userStore = useUserStore()
 const shareLink = computed(() => {
   if (!userStore.userInfo?.secretKey) return ''
   const origin = window.location.origin
-  return `${origin}/monitor?key=${userStore.userInfo.secretKey}`
+  // 秘钥可能含特殊字符,必须URL编码后再拼入分享链接
+  return `${origin}/monitor?key=${encodeURIComponent(userStore.userInfo.secretKey)}`
 })
 
 const handleCopyKey = async () => {
@@ -151,10 +152,8 @@ const handleRegenerateKey = async () => {
     const res = await regenerateKeyApi()
     userStore.updateSecretKey(res.data.secretKey)
     ElMessage.success('秘钥已重新生成')
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error(error.message || '操作失败')
-    }
+  } catch {
+    // 用户取消弹窗或请求失败(错误提示已由请求拦截器统一弹出)
   }
 }
 
@@ -173,10 +172,8 @@ const handleRevokeKey = async () => {
     await revokeKeyApi()
     userStore.updateSecretKey('')
     ElMessage.success('秘钥已作废')
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error(error.message || '操作失败')
-    }
+  } catch {
+    // 用户取消弹窗或请求失败(错误提示已由请求拦截器统一弹出)
   }
 }
 

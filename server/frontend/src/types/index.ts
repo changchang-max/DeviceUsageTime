@@ -6,9 +6,9 @@ export interface ApiResponse<T = any> {
   data: T
 }
 
-// 用户相关类型
+// 用户相关类型(后端 UserProfileVO: 邮箱即全局唯一标识,无userId字段)
 export interface User {
-  userId: string
+  userId?: string
   email: string
   secretKey: string
   createdAt: string

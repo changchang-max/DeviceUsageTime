@@ -1,15 +1,10 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { viteMockServe } from 'vite-plugin-mock'
 import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig({
   plugins: [
-    vue(),
-    viteMockServe({
-      mockPath: 'mock',
-      enable: true,
-    })
+    vue()
   ],
   resolve: {
     alias: {
@@ -21,11 +16,16 @@ export default defineConfig({
     host: true,
     open: true,
     proxy: {
-      // 认证相关接口代理到后端 Spring Boot(默认 8080)。
-      // /api/data、/api/user 暂仍由 vite-plugin-mock 提供,故代理范围仅限 /api/auth
-      '/api/auth': {
+      // 所有 REST API(/api/auth、/api/data、/api/user 等)代理到后端 Spring Boot(默认 8080)
+      '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true
+      },
+      // WebSocket 实时推送代理到后端(协议见 docs/前后端API文档.md 第7章)
+      '/ws': {
+        target: 'ws://localhost:8080',
+        changeOrigin: true,
+        ws: true
       }
     }
   }

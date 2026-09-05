@@ -167,8 +167,8 @@ const handleSendCode = async () => {
         if (timer) clearInterval(timer)
       }
     }, 1000)
-  } catch (error: any) {
-    ElMessage.error(error.message || '发送验证码失败')
+  } catch {
+    // 错误提示已由请求拦截器统一弹出
   }
 }
 
@@ -183,8 +183,8 @@ const handleRegister = async () => {
       await userStore.register(formData.email, formData.password, formData.code)
       ElMessage.success('注册成功,请登录')
       router.push('/login')
-    } catch (error: any) {
-      ElMessage.error(error.message || '注册失败')
+    } catch {
+      // 错误提示已由请求拦截器统一弹出
     } finally {
       loading.value = false
     }

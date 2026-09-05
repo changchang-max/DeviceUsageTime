@@ -101,9 +101,13 @@ export const useWebSocketStore = defineStore('websocket', () => {
   const connect = (userId: string, token?: string, key?: string) => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
-    const authParam = token
-      ? `token=${encodeURIComponent(token)}`
-      : `key=${encodeURIComponent(key || '')}`
+    // 秘钥认证优先于Token认证(与REST请求层保持一致):
+    // 携带key打开监控页(查看他人分享)时,即使浏览器残留登录Token,也以秘钥身份连接
+    const authParam = key
+      ? `key=${encodeURIComponent(key)}`
+      : token
+        ? `token=${encodeURIComponent(token)}`
+        : ''
     const wsUrl = `${protocol}//${host}/ws/device?${authParam}`
 
     const currentGeneration = ++generation

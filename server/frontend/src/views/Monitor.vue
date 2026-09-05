@@ -80,7 +80,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useDataStore } from '@/stores/data'
 import { useWebSocketStore } from '@/stores/websocket'
 import { useUserStore } from '@/stores/user'
@@ -93,6 +93,7 @@ import { SuccessFilled, Loading, CircleClose } from '@element-plus/icons-vue'
 import type { WebSocketMessage } from '@/types/websocket'
 
 const route = useRoute()
+const router = useRouter()
 const dataStore = useDataStore()
 const wsStore = useWebSocketStore()
 const userStore = useUserStore()
@@ -182,6 +183,12 @@ onMounted(async () => {
   secretKey.value = route.query.key as string || ''
   const authKey = secretKey.value || undefined
 
+  // 监控页必须有访问凭证(Token或秘钥),否则跳转秘钥/登录入口页
+  if (!authToken && !authKey) {
+    router.replace('/login')
+    return
+  }
+
   // 获取当前月份有数据的日期
   const yearMonth = new Date().toISOString().slice(0, 7)
   await dataStore.fetchDataDates(yearMonth, authKey)
@@ -189,10 +196,11 @@ onMounted(async () => {
   // 获取实时数据
   await dataStore.fetchRealtimeData(authKey)
 
-  // 连接WebSocket(登录用户用Token，秘钥查看者用秘钥)。
-  // 秘钥查看者不知道被查看用户标识，但仍建立连接，服务端会自动订阅秘钥持有者
-  if (userId.value || authToken || authKey) {
-    wsStore.connect(userId.value, authToken, authKey)
+  // 连接WebSocket(秘钥查看者用秘钥,登录用户用Token)。
+  // 秘钥查看者: 不显式订阅任何userId,服务端建连后会自动订阅秘钥持有者;
+  // Token登录用户: 显式订阅自己的邮箱(与服务端自动订阅一致,无副作用)
+  if (authKey || authToken) {
+    wsStore.connect(authKey ? '' : userId.value, authToken, authKey)
     wsStore.setMessageHandler(handleWsMessage)
   }
 })
