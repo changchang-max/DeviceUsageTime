@@ -4,7 +4,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.stereotype.Service;
 import top.primordialcode.backend.dto.DataUpload.ApplicationDTO;
 import top.primordialcode.backend.dto.DataUpload.RedisSaveOtherDataDTO;
@@ -13,6 +15,7 @@ import top.primordialcode.backend.dto.DataUpload.StatisticsDTO;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -46,12 +49,25 @@ public class RedisDataUploadServer {
     public void updateApplications(String email, LocalDate date, List<ApplicationDTO> applications) {
         String key = applicationsKey(email, date);
         try {
+            // 先序列化，避免在 Pipeline 回调内抛出受检异常
+            Map<String, String> fieldMap = new LinkedHashMap<>();
             for (ApplicationDTO app : applications) {
-                String json = objectMapper.writeValueAsString(app);
-                // 以Hash结构放入Redis
-                redisTemplate.opsForHash().put(key, app.getName(), json);
+                fieldMap.put(app.getName(), objectMapper.writeValueAsString(app));
             }
-            postWrite(key, email);
+
+            // 使用 Pipeline 将 HSET 与 EXPIRE 打包为一批命令，避免写入成功但 TTL 设置失败导致内存泄漏（其实无法完全避免，Pipelined只能将两条命令打包在一起顺序发送，但无法保证其原子性，Redis也不会回滚）
+            RedisSerializer<String> serializer = redisTemplate.getStringSerializer();
+            redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
+                byte[] rawKey = serializer.serialize(key);
+                for (Map.Entry<String, String> entry : fieldMap.entrySet()) {
+                    connection.hSet(rawKey,
+                            serializer.serialize(entry.getKey()),
+                            serializer.serialize(entry.getValue()));
+                }
+                connection.expire(rawKey, REDIS_TTL_DAYS * 86400);
+                return null;
+            });
+            cleanLegacyKeys(email);
         } catch (JsonProcessingException e) {
             log.error("updateApplications JSON序列化失败: email={}, date={}, error={}", email, date, e.getMessage(), e);
             throw new RuntimeException("Applications数据序列化失败", e);
@@ -72,8 +88,9 @@ public class RedisDataUploadServer {
         String key = statisticsKey(email, date);
         try {
             String json = objectMapper.writeValueAsString(statistics);
-            redisTemplate.opsForValue().set(key, json);
-            postWrite(key, email);
+            // SET key value EX ttl 原子命令，避免写入成功但 TTL 设置失败导致内存泄漏
+            redisTemplate.opsForValue().set(key, json, Duration.ofDays(REDIS_TTL_DAYS));
+            cleanLegacyKeys(email);
         } catch (JsonProcessingException e) {
             log.error("updateStatistics JSON序列化失败: email={}, date={}, error={}", email, date, e.getMessage(), e);
             throw new RuntimeException("Statistics数据序列化失败", e);
@@ -94,8 +111,9 @@ public class RedisDataUploadServer {
         String key = otherDataKey(email, date);
         try {
             String json = objectMapper.writeValueAsString(otherData);
-            redisTemplate.opsForValue().set(key, json);
-            postWrite(key, email);
+            // SET key value EX ttl 原子命令，避免写入成功但 TTL 设置失败导致内存泄漏
+            redisTemplate.opsForValue().set(key, json, Duration.ofDays(REDIS_TTL_DAYS));
+            cleanLegacyKeys(email);
         } catch (JsonProcessingException e) {
             log.error("updateOtherData JSON序列化失败: email={}, date={}, error={}", email, date, e.getMessage(), e);
             throw new RuntimeException("OtherData数据序列化失败", e);
@@ -194,22 +212,16 @@ public class RedisDataUploadServer {
     }
 
     /**
-     * 写入后的收尾工作：刷新TTL，并清理升级前遗留的"无日期"旧key，
-     * 避免旧快照(跨日期混杂)长期残留Redis。
-     * postWrite失败只记日志，不阻断主流程。
+     * 清理升级前遗留的"无日期"旧key，避免旧快照长期残留Redis。
+     * 失败只记日志，不阻断主流程。
      */
-    private void postWrite(String newKey, String email) {
-        try {
-            redisTemplate.expire(newKey, Duration.ofDays(REDIS_TTL_DAYS));
-        } catch (Exception e) {
-            log.warn("postWrite 刷新TTL失败: key={}, error={}", newKey, e.getMessage(), e);
-        }
+    private void cleanLegacyKeys(String email) {
         try {
             redisTemplate.delete(legacyApplicationsKey(email));
             redisTemplate.delete(legacyStatisticsKey(email));
             redisTemplate.delete(legacyOtherDataKey(email));
         } catch (Exception e) {
-            log.warn("postWrite 清理旧key失败: email={}, error={}", email, e.getMessage(), e);
+            log.warn("cleanLegacyKeys 清理旧key失败: email={}, error={}", email, e.getMessage(), e);
         }
     }
 
