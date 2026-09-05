@@ -15,6 +15,7 @@ import top.primordialcode.backend.mapper.UserAuthMapper;
 import top.primordialcode.backend.dto.UserRegisterDTO;
 import top.primordialcode.backend.service.Register.impl.MailServerImpl;
 import top.primordialcode.backend.utils.GenKeyUtil;
+import top.primordialcode.backend.utils.PasswordValidateUtil;
 
 import java.time.Instant;
 
@@ -207,6 +208,10 @@ public class MailServer implements MailServerImpl {
             return Result.error(400,"用户已存在，无需重复注册",null);
         }
 
+        // 校验密码格式：至少8位，同时包含字母和数字
+        if (!PasswordValidateUtil.isValid(user_password)) {
+            return Result.error(400,"密码至少8位，且须同时包含字母和数字",null);
+        }
 
         // 对用户明文密码进行哈希加密
         String encodePassword = passwordEncoder.encode(user_password);
