@@ -1,6 +1,5 @@
 package top.primordialcode.backend.service.Data;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -70,8 +69,9 @@ public class DataUploadServer {
             if (statistics != null) {
                 redisDataUploadServer.updateStatistics(userEmail, dataDate, statistics);
             }
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException("JSON序列化失败: " + e.getMessage(), e);
+        } catch (RuntimeException e) {
+            log.error("Redis数据写入失败: email={}, date={}, error={}", userEmail, dataDate, e.getMessage(), e);
+            throw e;
         }
 
         // 归档到MySQL冷数据(按用户+日期聚合)，失败只记日志，不影响实时数据与推送

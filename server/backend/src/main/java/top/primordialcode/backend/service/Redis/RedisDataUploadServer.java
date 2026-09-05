@@ -2,6 +2,7 @@ package top.primordialcode.backend.service.Redis;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 public class RedisDataUploadServer {
 
@@ -40,23 +42,23 @@ public class RedisDataUploadServer {
      * @param email        用户邮箱
      * @param date         数据归属日期
      * @param applications Applications数据
-     * @throws JsonProcessingException
      */
-    public void updateApplications(String email, LocalDate date, List<ApplicationDTO> applications)
-            throws JsonProcessingException {
-        // 这些函数的作用仅为处理字符串
+    public void updateApplications(String email, LocalDate date, List<ApplicationDTO> applications) {
         String key = applicationsKey(email, date);
-        for (ApplicationDTO app : applications) {
-            String json = objectMapper.writeValueAsString(app);
-
-            //以Hash结构放入Redis
-            redisTemplate.opsForHash().put(
-                    key,
-                    app.getName(),
-                    json
-            );
+        try {
+            for (ApplicationDTO app : applications) {
+                String json = objectMapper.writeValueAsString(app);
+                // 以Hash结构放入Redis
+                redisTemplate.opsForHash().put(key, app.getName(), json);
+            }
+            postWrite(key, email);
+        } catch (JsonProcessingException e) {
+            log.error("updateApplications JSON序列化失败: email={}, date={}, error={}", email, date, e.getMessage(), e);
+            throw new RuntimeException("Applications数据序列化失败", e);
+        } catch (Exception e) {
+            log.error("updateApplications Redis写入失败: email={}, date={}, error={}", email, date, e.getMessage(), e);
+            throw new RuntimeException("Applications数据写入Redis失败", e);
         }
-        postWrite(key, email);
     }
 
     /**
@@ -65,15 +67,20 @@ public class RedisDataUploadServer {
      * @param email      用户邮箱
      * @param date       数据归属日期
      * @param statistics Statistics数据
-     * @throws JsonProcessingException
      */
-    public void updateStatistics(String email, LocalDate date, StatisticsDTO statistics)
-            throws JsonProcessingException {
+    public void updateStatistics(String email, LocalDate date, StatisticsDTO statistics) {
         String key = statisticsKey(email, date);
-        String json = objectMapper.writeValueAsString(statistics);
-
-        redisTemplate.opsForValue().set(key, json);
-        postWrite(key, email);
+        try {
+            String json = objectMapper.writeValueAsString(statistics);
+            redisTemplate.opsForValue().set(key, json);
+            postWrite(key, email);
+        } catch (JsonProcessingException e) {
+            log.error("updateStatistics JSON序列化失败: email={}, date={}, error={}", email, date, e.getMessage(), e);
+            throw new RuntimeException("Statistics数据序列化失败", e);
+        } catch (Exception e) {
+            log.error("updateStatistics Redis写入失败: email={}, date={}, error={}", email, date, e.getMessage(), e);
+            throw new RuntimeException("Statistics数据写入Redis失败", e);
+        }
     }
 
     /**
@@ -82,15 +89,20 @@ public class RedisDataUploadServer {
      * @param email     用户邮箱
      * @param date      数据归属日期
      * @param otherData 剩余数据DTO
-     * @throws JsonProcessingException
      */
-    public void updateOtherData(String email, LocalDate date, RedisSaveOtherDataDTO otherData)
-            throws JsonProcessingException {
+    public void updateOtherData(String email, LocalDate date, RedisSaveOtherDataDTO otherData) {
         String key = otherDataKey(email, date);
-        String json = objectMapper.writeValueAsString(otherData);
-
-        redisTemplate.opsForValue().set(key, json);
-        postWrite(key, email);
+        try {
+            String json = objectMapper.writeValueAsString(otherData);
+            redisTemplate.opsForValue().set(key, json);
+            postWrite(key, email);
+        } catch (JsonProcessingException e) {
+            log.error("updateOtherData JSON序列化失败: email={}, date={}, error={}", email, date, e.getMessage(), e);
+            throw new RuntimeException("OtherData数据序列化失败", e);
+        } catch (Exception e) {
+            log.error("updateOtherData Redis写入失败: email={}, date={}, error={}", email, date, e.getMessage(), e);
+            throw new RuntimeException("OtherData数据写入Redis失败", e);
+        }
     }
 
     /**
@@ -99,22 +111,24 @@ public class RedisDataUploadServer {
      * @param email 用户邮箱
      * @param date  数据归属日期
      * @return 应用列表，若无数据则返回空列表
-     * @throws JsonProcessingException
      */
-    public List<ApplicationDTO> getApplications(String email, LocalDate date)
-            throws JsonProcessingException {
+    public List<ApplicationDTO> getApplications(String email, LocalDate date) {
         String key = applicationsKey(email, date);
-        Map<Object, Object> entries = redisTemplate.opsForHash().entries(key);
-
-        List<ApplicationDTO> applications = new ArrayList<>();
-        for (Object value : entries.values()) {
-            ApplicationDTO app = objectMapper.readValue(
-                    (String) value,
-                    ApplicationDTO.class
-            );
-            applications.add(app);
+        try {
+            Map<Object, Object> entries = redisTemplate.opsForHash().entries(key);
+            List<ApplicationDTO> applications = new ArrayList<>();
+            for (Object value : entries.values()) {
+                ApplicationDTO app = objectMapper.readValue((String) value, ApplicationDTO.class);
+                applications.add(app);
+            }
+            return applications;
+        } catch (JsonProcessingException e) {
+            log.error("getApplications JSON反序列化失败: email={}, date={}, error={}", email, date, e.getMessage(), e);
+            throw new RuntimeException("Applications数据反序列化失败", e);
+        } catch (Exception e) {
+            log.error("getApplications Redis读取失败: email={}, date={}, error={}", email, date, e.getMessage(), e);
+            throw new RuntimeException("Applications数据读取Redis失败", e);
         }
-        return applications;
     }
 
     /**
@@ -123,17 +137,22 @@ public class RedisDataUploadServer {
      * @param email 用户邮箱
      * @param date  数据归属日期
      * @return 统计数据，若无数据则返回null
-     * @throws JsonProcessingException
      */
-    public StatisticsDTO getStatistics(String email, LocalDate date)
-            throws JsonProcessingException {
+    public StatisticsDTO getStatistics(String email, LocalDate date) {
         String key = statisticsKey(email, date);
-        String json = redisTemplate.opsForValue().get(key);
-
-        if (json == null) {
-            return null;
+        try {
+            String json = redisTemplate.opsForValue().get(key);
+            if (json == null) {
+                return null;
+            }
+            return objectMapper.readValue(json, StatisticsDTO.class);
+        } catch (JsonProcessingException e) {
+            log.error("getStatistics JSON反序列化失败: email={}, date={}, error={}", email, date, e.getMessage(), e);
+            throw new RuntimeException("Statistics数据反序列化失败", e);
+        } catch (Exception e) {
+            log.error("getStatistics Redis读取失败: email={}, date={}, error={}", email, date, e.getMessage(), e);
+            throw new RuntimeException("Statistics数据读取Redis失败", e);
         }
-        return objectMapper.readValue(json, StatisticsDTO.class);
     }
 
     /**
@@ -142,17 +161,22 @@ public class RedisDataUploadServer {
      * @param email 用户邮箱
      * @param date  数据归属日期
      * @return 剩余数据DTO，若无数据则返回null
-     * @throws JsonProcessingException
      */
-    public RedisSaveOtherDataDTO getOtherData(String email, LocalDate date)
-            throws JsonProcessingException {
+    public RedisSaveOtherDataDTO getOtherData(String email, LocalDate date) {
         String key = otherDataKey(email, date);
-        String json = redisTemplate.opsForValue().get(key);
-
-        if (json == null) {
-            return null;
+        try {
+            String json = redisTemplate.opsForValue().get(key);
+            if (json == null) {
+                return null;
+            }
+            return objectMapper.readValue(json, RedisSaveOtherDataDTO.class);
+        } catch (JsonProcessingException e) {
+            log.error("getOtherData JSON反序列化失败: email={}, date={}, error={}", email, date, e.getMessage(), e);
+            throw new RuntimeException("OtherData数据反序列化失败", e);
+        } catch (Exception e) {
+            log.error("getOtherData Redis读取失败: email={}, date={}, error={}", email, date, e.getMessage(), e);
+            throw new RuntimeException("OtherData数据读取Redis失败", e);
         }
-        return objectMapper.readValue(json, RedisSaveOtherDataDTO.class);
     }
 
     /* ==================== Key与生命周期工具 ==================== */
@@ -172,12 +196,21 @@ public class RedisDataUploadServer {
     /**
      * 写入后的收尾工作：刷新TTL，并清理升级前遗留的"无日期"旧key，
      * 避免旧快照(跨日期混杂)长期残留Redis。
+     * postWrite失败只记日志，不阻断主流程。
      */
     private void postWrite(String newKey, String email) {
-        redisTemplate.expire(newKey, Duration.ofDays(REDIS_TTL_DAYS));
-        redisTemplate.delete(legacyApplicationsKey(email));
-        redisTemplate.delete(legacyStatisticsKey(email));
-        redisTemplate.delete(legacyOtherDataKey(email));
+        try {
+            redisTemplate.expire(newKey, Duration.ofDays(REDIS_TTL_DAYS));
+        } catch (Exception e) {
+            log.warn("postWrite 刷新TTL失败: key={}, error={}", newKey, e.getMessage(), e);
+        }
+        try {
+            redisTemplate.delete(legacyApplicationsKey(email));
+            redisTemplate.delete(legacyStatisticsKey(email));
+            redisTemplate.delete(legacyOtherDataKey(email));
+        } catch (Exception e) {
+            log.warn("postWrite 清理旧key失败: email={}, error={}", email, e.getMessage(), e);
+        }
     }
 
     private String legacyApplicationsKey(String email) {
