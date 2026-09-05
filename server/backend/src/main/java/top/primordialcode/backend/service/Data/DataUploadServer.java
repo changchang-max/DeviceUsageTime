@@ -10,9 +10,11 @@ import top.primordialcode.backend.dto.DataUpload.RedisSaveOtherDataDTO;
 import top.primordialcode.backend.dto.DataUpload.StatisticsDTO;
 import top.primordialcode.backend.service.Redis.RedisDataUploadServer;
 import top.primordialcode.backend.service.WebSocket.DeviceWebSocketHandler;
+import top.primordialcode.backend.utils.DataDateUtil;
 import top.primordialcode.backend.utils.JwtTokenUtil;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
 
@@ -46,23 +48,27 @@ public class DataUploadServer {
         List<ApplicationDTO> applications = data.getApplications();
         StatisticsDTO statistics = data.getStatistics();
 
+        // 数据归属日期: 统一换算到 Asia/Shanghai 时区，
+        // 避免使用UTC把东八区凌晨(00:00-07:59)上传的数据归到前一天
+        LocalDate dataDate = DataDateUtil.toDataDate(timestamp);
+
         // 将其它数据封装进RedisSaveOtherDataDTO
         RedisSaveOtherDataDTO redisSaveOtherDataDTO = new RedisSaveOtherDataDTO();
         redisSaveOtherDataDTO.setUserEmail(userEmail);
         redisSaveOtherDataDTO.setTimestamp(timestamp);
 
-        // 存入Redis
+        // 存入Redis(按归属日期分桶: 补传/误传其他日期的数据不会污染今日实时快照)
         try {
-            redisDataUploadServer.updateOtherData(userEmail, redisSaveOtherDataDTO);
+            redisDataUploadServer.updateOtherData(userEmail, dataDate, redisSaveOtherDataDTO);
             
             // 只有当applications不为null且不为空时才更新
             if (applications != null && !applications.isEmpty()) {
-                redisDataUploadServer.updateApplications(userEmail, applications);
+                redisDataUploadServer.updateApplications(userEmail, dataDate, applications);
             }
             
             // 只有当statistics不为null时才更新
             if (statistics != null) {
-                redisDataUploadServer.updateStatistics(userEmail, statistics);
+                redisDataUploadServer.updateStatistics(userEmail, dataDate, statistics);
             }
         } catch (JsonProcessingException e) {
             throw new RuntimeException("JSON序列化失败: " + e.getMessage(), e);
@@ -75,15 +81,23 @@ public class DataUploadServer {
             log.error("历史数据归档失败: " + e.getMessage(), e);
         }
 
-        // 推送给所有订阅该用户的查看者(协议7.4)
+        // 仅当上传数据归属"今天"时才推送给实时查看者(协议7.4)。
+        // 其他日期的上传(如客户端补传历史)只会归档进MySQL供日历查询，
+        // 若也推送实时更新会把历史快照覆盖到查看者正在看的"今日实时页"。
+        if (!dataDate.equals(DataDateUtil.today())) {
+            log.debug("非今日数据上传, 不推送实时更新: userId={}, date={}", userEmail, dataDate);
+            return;
+        }
+
+        // 推送给所有订阅该用户的查看者
         // 推送Redis中的完整实时快照: 所有应用的累计数据 + 统计数据 + 最新时间戳
         try {
             List<ApplicationDTO> latestApplications =
-                    redisDataUploadServer.getApplications(userEmail);
+                    redisDataUploadServer.getApplications(userEmail, dataDate);
             StatisticsDTO latestStatistics =
-                    redisDataUploadServer.getStatistics(userEmail);
+                    redisDataUploadServer.getStatistics(userEmail, dataDate);
             RedisSaveOtherDataDTO latestOtherData =
-                    redisDataUploadServer.getOtherData(userEmail);
+                    redisDataUploadServer.getOtherData(userEmail, dataDate);
 
             Instant latestTimestamp =
                     (latestOtherData != null && latestOtherData.getTimestamp() != null)

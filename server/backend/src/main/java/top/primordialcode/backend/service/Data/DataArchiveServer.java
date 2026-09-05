@@ -9,11 +9,11 @@ import top.primordialcode.backend.dto.DataUpload.StatisticsDTO;
 import top.primordialcode.backend.entity.AppUsageRecordEntity;
 import top.primordialcode.backend.entity.DataDateIndexEntity;
 import top.primordialcode.backend.mapper.HistoryDataMapper;
+import top.primordialcode.backend.utils.DataDateUtil;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -45,7 +45,9 @@ public class DataArchiveServer {
         if (timestamp == null) {
             return;
         }
-        LocalDate date = timestamp.atZone(ZoneOffset.UTC).toLocalDate();
+        // 归属日期统一换算到 Asia/Shanghai 时区(与Redis分桶、前端日历保持一致)，
+        // 避免使用UTC把东八区凌晨上传的数据归到前一天
+        LocalDate date = DataDateUtil.toDataDate(timestamp);
 
         boolean hasData = false;
 

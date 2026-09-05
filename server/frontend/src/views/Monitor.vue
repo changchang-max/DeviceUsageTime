@@ -91,6 +91,7 @@ import BarChart from '@/components/BarChart.vue'
 import StatsCard from '@/components/StatsCard.vue'
 import { SuccessFilled, Loading, CircleClose } from '@element-plus/icons-vue'
 import type { WebSocketMessage } from '@/types/websocket'
+import { toLocalDateKey, toLocalYearMonthKey } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -98,7 +99,8 @@ const dataStore = useDataStore()
 const wsStore = useWebSocketStore()
 const userStore = useUserStore()
 
-const selectedDate = ref(new Date().toISOString().split('T')[0])
+// 默认选中本地时区的今天(与Calendar、后端Asia/Shanghai归属日期保持一致)
+const selectedDate = ref(toLocalDateKey())
 const isRealtime = ref(true)
 const userId = ref<string>('')
 const secretKey = ref<string>('')
@@ -144,7 +146,7 @@ const statistics = computed(() => {
 })
 
 const handleDateChange = async (date: string) => {
-  const today = new Date().toISOString().split('T')[0]
+  const today = toLocalDateKey()
   isRealtime.value = date === today
   
   if (isRealtime.value) {
@@ -189,8 +191,8 @@ onMounted(async () => {
     return
   }
 
-  // 获取当前月份有数据的日期
-  const yearMonth = new Date().toISOString().slice(0, 7)
+  // 获取当前月份有数据的日期(用本地年月,与日历一致)
+  const yearMonth = toLocalYearMonthKey()
   await dataStore.fetchDataDates(yearMonth, authKey)
 
   // 获取实时数据

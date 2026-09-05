@@ -17,6 +17,7 @@ import top.primordialcode.backend.exception.UserNotFoundException;
 import top.primordialcode.backend.mapper.HistoryDataMapper;
 import top.primordialcode.backend.mapper.UserAuthMapper;
 import top.primordialcode.backend.service.Redis.RedisDataUploadServer;
+import top.primordialcode.backend.utils.DataDateUtil;
 import top.primordialcode.backend.utils.JwtTokenUtil;
 import top.primordialcode.backend.vo.data.DataDatesVO;
 import top.primordialcode.backend.vo.data.HistoryApplicationVO;
@@ -26,7 +27,6 @@ import top.primordialcode.backend.vo.data.RealtimeDataVO;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
-import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -66,13 +66,16 @@ public class DataQueryServer {
         }
 
         try {
-            // 读取Redis中的实时数据
+            // 实时数据即"今日"的热数据快照: 以统一时区(Asia/Shanghai)当天的日期分桶读取。
+            // 客户端补传/误传的其他日期数据归档在MySQL中,不会出现在这里。
+            LocalDate today = DataDateUtil.today();
+
             List<ApplicationDTO> applications =
-                    redisDataUploadServer.getApplications(userEmail);
+                    redisDataUploadServer.getApplications(userEmail, today);
             StatisticsDTO statistics =
-                    redisDataUploadServer.getStatistics(userEmail);
+                    redisDataUploadServer.getStatistics(userEmail, today);
             RedisSaveOtherDataDTO otherData =
-                    redisDataUploadServer.getOtherData(userEmail);
+                    redisDataUploadServer.getOtherData(userEmail, today);
 
             Instant timestamp = (otherData != null)
                     ? otherData.getTimestamp()
@@ -82,9 +85,7 @@ public class DataQueryServer {
             RealtimeDataVO vo = new RealtimeDataVO();
             vo.setUserId(userEmail);
             vo.setTimestamp(timestamp);
-            vo.setDate(timestamp != null
-                    ? timestamp.atZone(ZoneOffset.UTC).toLocalDate().toString()
-                    : null);
+            vo.setDate(today.toString());
             vo.setApplications(applications);
             vo.setStatistics(statistics);
 
