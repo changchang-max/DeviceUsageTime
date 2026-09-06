@@ -1,6 +1,5 @@
 package top.primordialcode.backend.service.Data;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -172,10 +171,10 @@ class DataUploadServerTest {
     }
 
     @Test
-    @DisplayName("Redis序列化失败抛出RuntimeException")
-    void testReceiveWithJsonProcessingException() throws Exception {
+    @DisplayName("Redis写入失败抛出RuntimeException")
+    void testReceiveWithRedisFailure() throws Exception {
         when(jwtTokenUtil.getSubject(validToken)).thenReturn(email);
-        doThrow(new JsonProcessingException("Serialization failed") {})
+        doThrow(new RuntimeException("Redis写入失败"))
                 .when(redisDataUploadServer).updateOtherData(anyString(), any(), any());
 
         assertThrows(RuntimeException.class, () -> dataUploadServer.receive(validToken, testData));

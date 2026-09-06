@@ -51,6 +51,15 @@ public class DataUploadServer {
         // 避免使用UTC把东八区凌晨(00:00-07:59)上传的数据归到前一天
         LocalDate dataDate = DataDateUtil.toDataDate(timestamp);
 
+        // 时间戳被降级解析(缺失时区或时区格式错误, 已按默认时区解析)时,
+        // 将该情况标记为error, 并把上传用户与上传信息记录到日志
+        if (data.isTimestampFallbackUsed()) {
+            log.error("数据上传时间戳缺失或包含错误时区, 已按默认时区 {} 解析后正常入库。"
+                            + "userId={}, 原始timestamp={}, applications=[{}], statistics={}",
+                    DataDateUtil.DATA_ZONE.getId(), userEmail, data.getTimestampRaw(),
+                    summarizeApplications(applications), summarizeStatistics(statistics));
+        }
+
         // 将其它数据封装进RedisSaveOtherDataDTO
         RedisSaveOtherDataDTO redisSaveOtherDataDTO = new RedisSaveOtherDataDTO();
         redisSaveOtherDataDTO.setUserEmail(userEmail);
@@ -117,5 +126,44 @@ public class DataUploadServer {
             // WebSocket推送失败不应该影响数据存储，只记录日志
             log.error("WebSocket推送失败: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 汇总上传中的应用名称, 用于降级时间戳场景的日志记录
+     */
+    private String summarizeApplications(List<ApplicationDTO> applications) {
+        if (applications == null || applications.isEmpty()) {
+            return "无";
+        }
+        StringBuilder names = new StringBuilder();
+        for (ApplicationDTO app : applications) {
+            if (app != null && app.getName() != null && !app.getName().isBlank()) {
+                if (names.length() > 0) {
+                    names.append(", ");
+                }
+                names.append(app.getName());
+            }
+        }
+        return names.length() == 0 ? "无" : names.toString();
+    }
+
+    /**
+     * 汇总统计数据, 用于降级时间戳场景的日志记录
+     */
+    private String summarizeStatistics(StatisticsDTO statistics) {
+        if (statistics == null) {
+            return "无";
+        }
+        return "键盘=" + safeLong(statistics.getKeyboardCount()) + "次"
+                + ", 鼠标点击=" + safeLong(statistics.getMouseClickCount()) + "次"
+                + ", 鼠标移动=" + safeDouble(statistics.getMouseDistance()) + "m";
+    }
+
+    private long safeLong(Long value) {
+        return value != null ? value : 0L;
+    }
+
+    private double safeDouble(Double value) {
+        return value != null ? value : 0.0;
     }
 }
