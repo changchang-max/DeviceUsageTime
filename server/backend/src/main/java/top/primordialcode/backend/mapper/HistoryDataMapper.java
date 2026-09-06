@@ -101,4 +101,29 @@ public interface HistoryDataMapper {
     int updateLastActiveApp(@Param("user_email") String user_email,
                             @Param("stat_date") LocalDate stat_date,
                             @Param("last_active_app") String last_active_app);
+
+    /**
+     * 删除某用户全部应用使用记录关联的窗口标题(通过JOIN app_usage_records定位)
+     * 需在删除app_usage_records之前调用
+     * @return 受影响的行数
+     */
+    int deleteWindowTitlesByUserEmail(@Param("user_email") String user_email);
+
+    /**
+     * 删除某用户的全部应用使用记录
+     * @return 受影响的行数
+     */
+    int deleteAppRecordsByUserEmail(@Param("user_email") String user_email);
+
+    /**
+     * 删除某用户的全部每日统计数据
+     * @return 受影响的行数
+     */
+    int deleteDailyStatisticsByUserEmail(@Param("user_email") String user_email);
+
+    /**
+     * 删除某用户的全部有数据日期索引
+     * @return 受影响的行数
+     */
+    int deleteDateIndexesByUserEmail(@Param("user_email") String user_email);
 }

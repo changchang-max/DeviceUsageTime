@@ -36,7 +36,7 @@ public class JwtTokenUtil {
         return jwtUtil.parse(token);
     }
 
-    public static String getToken(String Authorization){
+    public String getToken(String Authorization){
 
         if (Authorization == null) {
             throw new RuntimeException("Authorization请求头不存在");

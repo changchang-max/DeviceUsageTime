@@ -58,6 +58,7 @@ public class SecurityConfig {
                                 // ========== ROLE_USER角色专属接口 ==========
                                 .requestMatchers(
                                         "/api/auth/logout",
+                                        "/api/auth/deregister",
                                         "/api/data/upload",
                                         "/index/home",
                                         "/api/user/**"

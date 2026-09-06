@@ -109,4 +109,33 @@
         order by stat_date asc
     </select>
 
+    <!-- 删除某用户全部应用使用记录关联的窗口标题(先于app_usage_records删除执行) -->
+    <delete id="deleteWindowTitlesByUserEmail">
+        delete t
+        from app_window_titles t
+        inner join app_usage_records r on t.record_id = r.id
+        where r.user_email = #{user_email}
+    </delete>
+
+    <!-- 删除某用户的全部应用使用记录 -->
+    <delete id="deleteAppRecordsByUserEmail">
+        delete
+        from app_usage_records
+        where user_email = #{user_email}
+    </delete>
+
+    <!-- 删除某用户的全部每日统计数据 -->
+    <delete id="deleteDailyStatisticsByUserEmail">
+        delete
+        from daily_statistics
+        where user_email = #{user_email}
+    </delete>
+
+    <!-- 删除某用户的全部有数据日期索引 -->
+    <delete id="deleteDateIndexesByUserEmail">
+        delete
+        from data_date_index
+        where user_email = #{user_email}
+    </delete>
+
 </mapper>
