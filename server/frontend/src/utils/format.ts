@@ -7,6 +7,27 @@ export const formatDuration = (seconds: number): string => {
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
 }
 
+// 格式化为中文时长文本(如: 6小时42分钟 / 1小时48分钟 / 52分钟 / 45秒)
+export const formatDurationText = (seconds: number): string => {
+  const totalSeconds = Math.max(0, Math.round(seconds))
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const secs = totalSeconds % 60
+
+  const parts: string[] = []
+  if (hours > 0) {
+    parts.push(`${hours}小时`)
+  }
+  if (minutes > 0) {
+    parts.push(`${minutes}分钟`)
+  }
+  // 不足1分钟时精确到秒
+  if (hours === 0 && minutes === 0 && secs > 0) {
+    parts.push(`${secs}秒`)
+  }
+  return parts.length > 0 ? parts.join('') : '0秒'
+}
+
 // 格式化数字,添加千分位分隔符
 export const formatNumber = (num: number): string => {
   return num.toLocaleString('zh-CN')

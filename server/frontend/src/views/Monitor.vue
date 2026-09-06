@@ -55,7 +55,7 @@
           </el-card>
         </div>
         
-        <!-- 统计数据卡片 -->
+        <!-- 统计数据卡片(键盘鼠标信息) -->
         <div class="stats-section">
           <StatsCard
             type="keyboard"
@@ -73,6 +73,13 @@
             label="鼠标移动距离"
           />
         </div>
+
+        <!-- 应用使用时长排行列表(键盘鼠标统计卡片下方) -->
+        <AppDurationRanking
+          :title="rankingTitle"
+          :items="rankingItems"
+          :previous-duration="isRealtime ? yesterdayTotal : null"
+        />
       </div>
     </div>
   </div>
@@ -89,7 +96,9 @@ import Calendar from '@/components/Calendar.vue'
 import PieChart from '@/components/PieChart.vue'
 import BarChart from '@/components/BarChart.vue'
 import StatsCard from '@/components/StatsCard.vue'
+import AppDurationRanking from '@/components/AppDurationRanking.vue'
 import { SuccessFilled, Loading, CircleClose } from '@element-plus/icons-vue'
+import { getHistoryDataApi } from '@/api'
 import type { WebSocketMessage } from '@/types/websocket'
 import { toLocalDateKey, toLocalYearMonthKey } from '@/utils/format'
 
@@ -145,6 +154,62 @@ const statistics = computed(() => {
   }
 })
 
+// 应用使用时长排行列表数据(当前视图: 实时或选中历史日期, 未排序交给组件处理)
+const rankingItems = computed(() => {
+  const apps = isRealtime.value
+    ? dataStore.realtimeData?.applications || []
+    : dataStore.historyData?.applications || []
+
+  return apps.map(app => ({
+    name: app.name,
+    duration: 'duration' in app ? app.duration || 0 : app.totalDuration || 0
+  }))
+})
+
+// 排行卡片标题(今日实时视图与历史日期视图区分)
+const rankingTitle = computed(() => {
+  if (isRealtime.value) {
+    return '今日应用使用时长'
+  }
+  const parts = selectedDate.value.split('-')
+  if (parts.length !== 3) {
+    return '应用使用时长'
+  }
+  return `${Number(parts[1])}月${Number(parts[2])}日 应用使用时长`
+})
+
+// 昨日总使用时长(秒), 用于"今日 vs 昨天"对比; 无昨日数据时为 null(不显示对比)
+const yesterdayTotal = ref<number | null>(null)
+
+const loadYesterdayTotal = async () => {
+  // 仅在今日实时视图下做昨日对比
+  if (!isRealtime.value) {
+    yesterdayTotal.value = null
+    return
+  }
+
+  const date = new Date()
+  date.setDate(date.getDate() - 1)
+  const yesterdayKey = toLocalDateKey(date)
+
+  try {
+    const res = await getHistoryDataApi(yesterdayKey, secretKey.value || undefined)
+    const apps = res.data?.applications
+    if (!apps || apps.length === 0) {
+      // 昨日无任何应用记录,视为无可对比数据
+      yesterdayTotal.value = null
+      return
+    }
+    yesterdayTotal.value = apps.reduce(
+      (sum, app) => sum + (app.totalDuration || 0),
+      0
+    )
+  } catch (error) {
+    // 昨日无数据或请求失败均视为无法对比,不打断页面主流程
+    yesterdayTotal.value = null
+  }
+}
+
 const handleDateChange = async (date: string) => {
   const today = toLocalDateKey()
   isRealtime.value = date === today
@@ -154,6 +219,9 @@ const handleDateChange = async (date: string) => {
   } else {
     await dataStore.fetchHistoryData(date, secretKey.value)
   }
+
+  // 切换日期后刷新排行卡片"昨日对比"数据(历史日期视图不展示对比)
+  await loadYesterdayTotal()
 }
 
 const handleWsMessage = (message: WebSocketMessage) => {
@@ -197,6 +265,9 @@ onMounted(async () => {
 
   // 获取实时数据
   await dataStore.fetchRealtimeData(authKey)
+
+  // 加载昨日总时长(供"今日应用使用时长"排行卡片对比)
+  await loadYesterdayTotal()
 
   // 连接WebSocket(秘钥查看者用秘钥,登录用户用Token)。
   // 秘钥查看者: 不显式订阅任何userId,服务端建连后会自动订阅秘钥持有者;
