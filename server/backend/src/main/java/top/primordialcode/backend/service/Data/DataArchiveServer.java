@@ -32,7 +32,7 @@ public class DataArchiveServer {
     HistoryDataMapper historyDataMapper;
 
     /**
-     * 归档一次增量上传数据
+     * 归档一次增量上传数据。这些数据即为客户端上传的全部数据
      * @param user_email 用户邮箱
      * @param timestamp 上传时间戳(用于确定归属日期)
      * @param applications 应用列表(含变化的应用)
@@ -56,6 +56,7 @@ public class DataArchiveServer {
             hasData = true;
             Long keyboardCount = statistics.getKeyboardCount() != null ? statistics.getKeyboardCount() : 0L;
             Long mouseClickCount = statistics.getMouseClickCount() != null ? statistics.getMouseClickCount() : 0L;
+            // Java的高精度小数类型
             BigDecimal mouseDistance = statistics.getMouseDistance() != null
                     ? BigDecimal.valueOf(statistics.getMouseDistance())
                     : BigDecimal.ZERO;

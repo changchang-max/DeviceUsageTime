@@ -90,7 +90,7 @@ public class DataQueryServer {
             vo.setStatistics(statistics);
 
             return vo;
-        } catch (JsonProcessingException e) {
+        } catch (Exception e) {
             throw new RuntimeException("读取实时数据失败: " + e.getMessage(), e);
         }
     }
