@@ -43,8 +43,16 @@ public class LoginPageController {
         try {
             token = loginServer.login(loginDTO);
         } catch (RuntimeException e) {
-            log.warn("用户不存在",e);
-            return Result.error(400,"用户不存在",null);
+            String msg = e.getMessage();
+            if ("用户不存在".equals(msg)) {
+                log.warn("登录失败，用户不存在: {}", loginDTO.getUser_email());
+                return Result.error(400, "用户名或密码错误", null);
+            } else if ("密码错误".equals(msg)) {
+                log.warn("登录失败，密码错误: {}", loginDTO.getUser_email());
+                return Result.error(400, "用户名或密码错误", null);
+            }
+            log.error("登录异常", e);
+            return Result.error(500, "服务器内部错误", null);
         }
         return Result.success("登录成功",token);
     }
