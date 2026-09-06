@@ -17,4 +17,12 @@ public class ApplicationDTO {
 
     @NotNull(message = "活跃状态不能为空")
     private Boolean isActive;
+
+    /**
+     * 是否仍在运行(当前是否仍在持续上报)。
+     * true=进程仍在运行, false=进程已关闭(已不再上报)。
+     * 与isActive配合使用: isActive=true且isRunning=true表示桌面最顶端的窗口;
+     * isActive=false且isRunning=true表示后台正在执行的进程。
+     */
+    private Boolean isRunning;
 }

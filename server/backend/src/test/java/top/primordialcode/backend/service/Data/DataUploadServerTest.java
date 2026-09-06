@@ -145,7 +145,7 @@ class DataUploadServerTest {
     }
 
     @Test
-    @DisplayName("applications为空列表时不调用updateApplications")
+    @DisplayName("applications为空列表时仍调用updateApplications(用于把快照应用标记为已关闭)")
     void testReceiveWithEmptyApplications() throws Exception {
         when(jwtTokenUtil.getSubject(validToken)).thenReturn(email);
         testData.setApplications(Arrays.asList());
@@ -153,7 +153,7 @@ class DataUploadServerTest {
         dataUploadServer.receive(validToken, testData);
 
         verify(redisDataUploadServer, times(1)).updateOtherData(anyString(), any(), any());
-        verify(redisDataUploadServer, never()).updateApplications(anyString(), any(), anyList());
+        verify(redisDataUploadServer, times(1)).updateApplications(anyString(), any(), anyList());
         verify(redisDataUploadServer, times(1)).updateStatistics(anyString(), any(), any());
     }
 

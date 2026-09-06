@@ -79,6 +79,7 @@
           :title="rankingTitle"
           :items="rankingItems"
           :previous-duration="isRealtime ? yesterdayTotal : null"
+          :show-status="isRealtime"
         />
       </div>
     </div>
@@ -160,10 +161,16 @@ const rankingItems = computed(() => {
     ? dataStore.realtimeData?.applications || []
     : dataStore.historyData?.applications || []
 
-  return apps.map(app => ({
-    name: app.name,
-    duration: 'duration' in app ? app.duration || 0 : app.totalDuration || 0
-  }))
+  return apps.map(app => {
+    // 实时数据才携带运行状态(isActive/isRunning), 历史数据无状态
+    const isRealtimeApp = 'isActive' in app
+    return {
+      name: app.name,
+      duration: isRealtimeApp ? app.duration || 0 : app.totalDuration || 0,
+      isActive: isRealtimeApp ? app.isActive : null,
+      isRunning: isRealtimeApp ? app.isRunning === true : null
+    }
+  })
 })
 
 // 排行卡片标题(今日实时视图与历史日期视图区分)

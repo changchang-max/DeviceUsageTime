@@ -69,8 +69,9 @@ public class DataUploadServer {
         try {
             redisDataUploadServer.updateOtherData(userEmail, dataDate, redisSaveOtherDataDTO);
             
-            // 只有当applications不为null且不为空时才更新
-            if (applications != null && !applications.isEmpty()) {
+            // applications为null(本次上传未携带应用数据)时不更新;
+            // 空数组表示当前无任何应用在运行, 同样需要调用以把快照中的应用标记为已关闭
+            if (applications != null) {
                 redisDataUploadServer.updateApplications(userEmail, dataDate, applications);
             }
             

@@ -15,9 +15,11 @@ import top.primordialcode.backend.dto.DataUpload.StatisticsDTO;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -42,17 +44,54 @@ public class RedisDataUploadServer {
      * Redis热数据必须按日期分桶，否则客户端补传/误传其他日期的数据会与
      * 当日实时数据混在同一份快照里，导致"实时(今日)"页面展示错误数据。
      *
+     * 快照语义: 哈希中保留"当天累计出现过的所有应用"及其累计时长(应用关闭后不清除);
+     * 同时以"本次上报集合"作为运行状态判据刷新每个应用的isRunning/isActive:
+     * - 本次上报的应用 → isRunning=true(正在运行)
+     * - 当天出现过但本次未上报的应用 → isRunning=false, isActive=false(已关闭)
+     * 这样前端可用 isActive+isRunning 区分"屏幕最顶端的窗口/后台运行/已关闭"。
+     *
      * @param email        用户邮箱
      * @param date         数据归属日期
-     * @param applications Applications数据
+     * @param applications Applications数据(本次正在上报的运行中应用; null/空表示当前无任何应用在运行)
      */
     public void updateApplications(String email, LocalDate date, List<ApplicationDTO> applications) {
         String key = applicationsKey(email, date);
         try {
-            // 先序列化，避免在 Pipeline 回调内抛出受检异常
+            // 读取当日现有快照: 判断哪些应用本次不再上报(已关闭)
+            Map<Object, Object> currentEntries = redisTemplate.opsForHash().entries(key);
+
+            // 本次上报的应用名称集合
+            Set<String> reportedNames = new HashSet<>();
             Map<String, String> fieldMap = new LinkedHashMap<>();
-            for (ApplicationDTO app : applications) {
-                fieldMap.put(app.getName(), objectMapper.writeValueAsString(app));
+
+            // ① 本次上报的应用: 一律视为正在运行(旧客户端即使不携带isRunning也按true处理)
+            if (applications != null) {
+                for (ApplicationDTO app : applications) {
+                    if (app == null || app.getName() == null || app.getName().isBlank()) {
+                        continue;
+                    }
+                    app.setIsRunning(Boolean.TRUE);
+                    reportedNames.add(app.getName());
+                    fieldMap.put(app.getName(), objectMapper.writeValueAsString(app));
+                }
+            }
+
+            // ② 当天出现过但本次未上报的应用: 标记为已关闭(isRunning=false)并清除前台标记
+            for (Map.Entry<Object, Object> entry : currentEntries.entrySet()) {
+                String name = String.valueOf(entry.getKey());
+                if (reportedNames.contains(name)) {
+                    continue;
+                }
+                ApplicationDTO existingApp =
+                        objectMapper.readValue((String) entry.getValue(), ApplicationDTO.class);
+                existingApp.setIsRunning(Boolean.FALSE);
+                existingApp.setIsActive(Boolean.FALSE);
+                fieldMap.put(name, objectMapper.writeValueAsString(existingApp));
+            }
+
+            if (fieldMap.isEmpty()) {
+                // 快照为空且本次也无上报, 无需任何写入
+                return;
             }
 
             // 使用 Pipeline 将 HSET 与 EXPIRE 打包为一批命令，避免写入成功但 TTL 设置失败导致内存泄漏（其实无法完全避免，Pipelined只能将两条命令打包在一起顺序发送，但无法保证其原子性，Redis也不会回滚）

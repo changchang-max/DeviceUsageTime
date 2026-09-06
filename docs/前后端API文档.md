@@ -347,18 +347,20 @@
 {
   "userEmail": "1234567@qq.com",
   "timestamp": "2026-07-12T10:30:45Z",
-  "applications": [                   // 仅包含有变化的应用
+  "applications": [                   // 仅包含当前正在运行的应用
     {
       "name": "Chrome",
       "windowTitle": "Google搜索",
       "duration": 3600,               // 累计时长(秒)
-      "isActive": true                // 是否当前活跃
+      "isActive": true,               // 是否当前屏幕最顶端窗口
+      "isRunning": true               // 是否当前仍在运行（可选，缺省视为 true）
     },
     {
       "name": "VSCode",
       "windowTitle": "main.py",
       "duration": 1800,
-      "isActive": false
+      "isActive": false,
+      "isRunning": true
     }
   ],
   "statistics": {
@@ -388,8 +390,11 @@
 
 **说明**:
 - 每秒上传一次
-- 只上传有变化的数据
-- 已关闭应用不包含在数组中
+- `applications` 数组中**只包含当前正在运行的应用**及其当日累计时长；已关闭的应用不出现在数组中
+- 屏幕最顶端窗口对应的应用 `isActive=true`，其余运行中的应用 `isActive=false`
+- `isRunning` 字段可选，缺省值为 `true`（出现在上报列表即代表正在运行）
+- 服务端会将**本次未上报但当日出现过**的应用自动标记为 `isRunning=false、isActive=false`（保留累计时长）
+- 上传空 `applications` 数组表示当前无任何应用运行，服务端将当日全部应用标为已关闭；`null` 则跳过状态更新
 - 服务端收到数据后立即推送给所有订阅该用户的查看者
 
 ## 6. 数据查询接口
@@ -417,13 +422,22 @@
         "name": "Chrome",
         "windowTitle": "Google搜索",
         "duration": 3600,
-        "isActive": true
+        "isActive": true,
+        "isRunning": true
       },
       {
         "name": "VSCode",
         "windowTitle": "main.py",
         "duration": 1800,
-        "isActive": false               // 已关闭应用
+        "isActive": false,
+        "isRunning": true
+      },
+      {
+        "name": "Notepad",
+        "windowTitle": "未命名",
+        "duration": 600,
+        "isActive": false,
+        "isRunning": false              // 已关闭，保留累计时长
       }
     ],
     "statistics": {
@@ -594,13 +608,22 @@
         "name": "Chrome",
         "windowTitle": "Google搜索",
         "duration": 3600,
-        "isActive": true
+        "isActive": true,
+        "isRunning": true
       },
       {
         "name": "VSCode",
         "windowTitle": "main.py",
         "duration": 1800,
-        "isActive": false
+        "isActive": false,
+        "isRunning": true
+      },
+      {
+        "name": "Notepad",
+        "windowTitle": "未命名",
+        "duration": 600,
+        "isActive": false,
+        "isRunning": false
       }
     ],
     "statistics": {
@@ -712,7 +735,8 @@
 | name | String | 是 | 应用名称 |
 | windowTitle | String | 是 | 窗口标题 |
 | duration | Integer | 是 | 累计使用时长(秒) |
-| isActive | Boolean | 是 | 是否当前活跃窗口 |
+| isActive | Boolean | 是 | 是否当前屏幕最顶端窗口（每次上报仅一个为 true） |
+| isRunning | Boolean | 否 | 是否当前仍在运行；上报时可省略，缺省视为 true；查询响应中 false 表示今日已关闭 |
 | totalDuration | Integer | 是 | 历史数据中的总时长(秒) |
 | sessions | Integer | 否 | 使用次数(历史数据) |
 | windowTitles | Array | 否 | 窗口标题列表(历史数据) |
@@ -811,7 +835,15 @@ curl -X POST http://localhost:8080/api/data/upload \
         "name": "Chrome",
         "windowTitle": "Google搜索",
         "duration": 3600,
-        "isActive": true
+        "isActive": true,
+        "isRunning": true
+      },
+      {
+        "name": "VSCode",
+        "windowTitle": "main.py",
+        "duration": 1800,
+        "isActive": false,
+        "isRunning": true
       }
     ],
     "statistics": {
@@ -943,7 +975,7 @@ setInterval(() => {
 
 ### 13.2 版本管理
 
-- **当前版本**: v1.3
+- **当前版本**: v1.4
 - **版本控制**: URL中包含版本号,如 `/api/v1/...`
 - **兼容性**: 保持向下兼容
 
@@ -951,6 +983,7 @@ setInterval(() => {
 
 | 日期 | 版本 | 更新内容 |
 |------|------|----------|
+| 2026-09-06 | v1.4 | 新增应用运行状态字段 `isRunning`：上传接口(5.1)、实时数据查询(6.1)、WebSocket 推送(7.4)及字段说明表(9.1)均已更新；上传语义调整为"仅含当前运行中的应用"，服务端自动标记未上报应用为已关闭 |
 | 2026-09-05 | v1.3 | 新增注销账号接口(3.6)和修改密码接口(3.8)；认证接口说明范围更新至 3.1~3.8 |
 | 2026-09-05 | v1.2 | 认证接口(3.1~3.7)与后端实现对齐:发送验证码路径改为 `/auth/sendCode`;登录/注册请求字段改为 `user_email`/`user_password`;登录响应 `data` 直接为 token 字符串;验证秘钥返回 `userName` 与 ROLE_VISITOR 角色 token |
 | 2026-07-13 | v1.1 | 新增验证码发送接口(3.1)、退出登录接口(3.5) |

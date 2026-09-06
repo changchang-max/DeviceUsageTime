@@ -40,6 +40,19 @@
 
       <el-divider class="summary-divider" />
 
+      <!-- 运行状态图例(仅实时视图) -->
+      <div v-if="showLegend" class="state-legend">
+        <span class="legend-item">
+          <i class="legend-dot dot-active"></i>顶端窗口
+        </span>
+        <span class="legend-item">
+          <i class="legend-dot dot-running"></i>后台运行
+        </span>
+        <span class="legend-item">
+          <i class="legend-dot dot-closed"></i>已关闭
+        </span>
+      </div>
+
       <!-- 列表列头 -->
       <div class="list-cols">
         <span class="col-name">应用</span>
@@ -50,7 +63,11 @@
       <transition-group name="rank" tag="div" class="app-list">
         <div v-for="item in sortedItems" :key="item.name" class="app-item">
           <div class="app-item-main">
-            <span class="app-name" :title="item.name">
+            <span
+              class="app-name"
+              :class="statusClassOf(item)"
+              :title="item.name"
+            >
               <el-icon class="app-play"><CaretRight /></el-icon>
               <span class="app-name-text">{{ item.name }}</span>
             </span>
@@ -88,6 +105,10 @@ import { formatDurationText } from '@/utils/format'
 interface RankingItem {
   name: string
   duration: number
+  // 是否为桌面最顶端的窗口(实时数据提供)
+  isActive?: boolean | null
+  // 是否仍在运行(实时数据提供; 历史/旧数据可能缺失)
+  isRunning?: boolean | null
 }
 
 type SortMode = 'name-asc' | 'name-desc' | 'time-asc' | 'time-desc'
@@ -99,14 +120,19 @@ const SORT_OPTIONS: Array<{ value: SortMode; label: string }> = [
   { value: 'time-desc', label: '使用时长降序' }
 ]
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   // 卡片标题(如: 今日应用使用时长 / 7月3日 应用使用时长)
   title: string
   // 应用使用时长列表(时长单位: 秒, 未排序)
   items: RankingItem[]
   // 前一天总使用时长(秒); 为 null 时不显示"比昨天"对比行
   previousDuration?: number | null
-}>()
+  // 是否展示"顶端窗口/后台运行/已关闭"运行状态配色与图例(仅实时视图有意义)
+  showStatus?: boolean
+}>(), {
+  previousDuration: null,
+  showStatus: false
+})
 
 // 排序方式(默认: 按使用时长降序)
 const sortMode = ref<SortMode>('time-desc')
@@ -167,6 +193,24 @@ const sortedItems = computed<RankingItem[]>(() => {
   return list
 })
 
+// 运行状态对应的应用名称样式类(仅实时视图开启状态配色时生效)
+const statusClassOf = (item: RankingItem): string => {
+  if (!props.showStatus) {
+    return ''
+  }
+  if (item.isRunning === true) {
+    // 仍在运行: 是桌面最顶端窗口时为绿色(特例), 否则为后台运行的蓝色
+    return item.isActive === true ? 'status-active' : 'status-running'
+  }
+  // isRunning为false或缺失(历史/旧数据)时一律按"已关闭"灰色处理
+  return 'status-closed'
+}
+
+// 运行状态图例: 仅实时视图且列表非空时展示
+const showLegend = computed<boolean>(() =>
+  props.showStatus && sortedItems.value.length > 0
+)
+
 // 与前一天对比信息(less: 比昨天少, more: 比昨天多, same: 持平)
 const trendInfo = computed<{ type: 'less' | 'more' | 'same'; text: string } | null>(() => {
   if (props.previousDuration === null || props.previousDuration === undefined) {
@@ -220,6 +264,41 @@ const barWidthOf = (item: RankingItem): string => {
 
 .sort-select {
   width: 140px;
+}
+
+/* 运行状态图例 */
+.state-legend {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+  padding: 0 4px 10px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot-active {
+  background: #67c23a;
+}
+
+.dot-running {
+  background: #409eff;
+}
+
+.dot-closed {
+  background: #c0c4cc;
 }
 
 /* 摘要区 */
@@ -315,6 +394,27 @@ const barWidthOf = (item: RankingItem): string => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 运行状态配色: 顶端窗口=绿加粗, 后台运行=蓝, 已关闭=灰 */
+.app-name.status-active {
+  color: #67c23a;
+  font-weight: 600;
+}
+
+.app-name.status-running {
+  color: #409eff;
+}
+
+.app-name.status-closed {
+  color: #c0c4cc;
+}
+
+/* 开启状态配色后 ▶ 图标跟随应用名称颜色 */
+.app-name.status-active .app-play,
+.app-name.status-running .app-play,
+.app-name.status-closed .app-play {
+  color: inherit;
 }
 
 .app-duration {
