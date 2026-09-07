@@ -6,11 +6,12 @@ from ui_mainWindow import Ui_MainWindow
 from ui_settings import Ui_Settings
 from PySide2.QtWidgets import *
 from PySide2.QtGui import QIcon,QPixmap
-from PySide2.QtCore import QEvent,Qt
+from PySide2.QtCore import QEvent,Qt,QThread,Signal,QTimer
 from qt_material import apply_stylesheet
 from ui_exit_window import Ui_Exit
 from ui_history_data_window import Ui_history_data_window
 import mytools
+import network
 import imgaes
 import base64
 import json
@@ -45,6 +46,30 @@ def handle_exception(exc_type, exc_value, exc_traceback):
     logging.error("程序崩溃", exc_info=(exc_type, exc_value, exc_traceback))
     
 sys.excepthook = handle_exception  #sys.excepthook可以捕获所有未被捕获的异常
+
+
+# ==================== 数据上传相关模块级状态 ====================
+# 当前正在运行的用户应用名(进程名)集合，由 window_monitor 每秒刷新，供上传线程判断哪些应用仍在运行
+current_running_apps = set()
+# 数据上传阶段: not_login=未登录 / ok=上传正常 / error=上传失败 / invalid=登录失效
+upload_stage = "not_login"
+# 供界面展示的当前上传状态文字(由上传线程更新)
+upload_status_text = "未登录"
+# 最近一次上传错误信息(由上传线程更新)
+upload_last_error = ""
+# 保护上传状态读写的小锁(设置窗口/上传线程分属不同线程)
+upload_lock = threading.Lock()
+# 全局唯一的API客户端(登录后在登录worker里单独创建实例，避免与上传线程交叉使用)
+api_client = network.ApiClient()
+
+
+# 更新上传状态(供上传线程调用)
+def set_upload_stage(stage: str, text: str, error: str = ""):
+    global upload_stage, upload_status_text, upload_last_error
+    with upload_lock:
+        upload_stage = stage
+        upload_status_text = text
+        upload_last_error = error
 
 
 # 过滤系统路径
@@ -141,7 +166,11 @@ def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict,the_old_
         with thread_lock:
             # 获取当前用户应用进程
             current_procs = get_user_app_pids()
-            
+
+            # 同步“当前正在运行的应用”集合，供上传线程过滤已关闭的应用
+            current_running_apps.clear()
+            current_running_apps.update(current_procs.keys())
+
             # 更新all_applications_dict
             # 1. 对现有进程的use_time+1
             for title in list(all_applications_dict.keys()):
@@ -277,6 +306,54 @@ def auto_save_thread(all_applications_dict: dict):
         save_data(all_applications_dict)
 
 
+# 数据上传线程：已登录时，每秒向服务器上传一次增量数据
+def data_upload_thread(all_applications_dict: dict):
+    while not stop_event.is_set():
+        # 读取本地配置；未登录(token为空)时每秒空转等待登录
+        token = config_File.get_token()
+        user_email = config_File.get_user_email()
+
+        if not token or not user_email:
+            set_upload_stage("not_login", "未登录", "")
+            time.sleep(1)
+            continue
+
+        # 每次上传前同步服务器地址与token(登录页可随时修改服务器地址)
+        api_client.base_url = config_File.get_server_url()
+        api_client.token = token
+
+        try:
+            # 在线程锁内拷贝快照，避免与window_monitor同时读写造成数据错乱
+            try:
+                with thread_lock:
+                    snapshot = {name: dict(proc_info) for name, proc_info in all_applications_dict.items()}
+                    running_apps = set(current_running_apps)
+            except RuntimeError:
+                # 恰好赶上window_monitor在锁外排序(clear+update)改写字典，本秒跳过，下一秒重试
+                time.sleep(1)
+                continue
+            # 获取当前屏幕最顶端窗口的进程名与标题(用于标记isActive与windowTitle)
+            foreground_name, foreground_title = mytools.get_foreground_window_info()
+            upload_data = network.build_upload_payload(
+                snapshot, running_apps, foreground_name, foreground_title, user_email)
+            api_client.upload(upload_data)
+            set_upload_stage("ok", f"已连接，上次上传 {mytools.hour()}", "")
+        except network.ApiException as e:
+            if e.code in (401, 403):
+                # token已失效：清空本地token，等待用户重新登录
+                logging.error(f"数据上传失败，token失效: {e}")
+                config_File.set_token("")
+                set_upload_stage("invalid", "登录已失效，请重新登录", str(e))
+            else:
+                set_upload_stage("error", "上传失败", str(e))
+        except Exception as e:
+            # 网络抖动等未知异常：记录日志后下个周期自动重试
+            logging.error(f"数据上传异常: {str(e)}")
+            set_upload_stage("error", "上传失败", f"网络异常: {e}")
+
+        time.sleep(1)  # 按要求每秒上传一次
+
+
 # 定义“功能”类
 class Functions:
     def __init__(self):
@@ -322,6 +399,52 @@ class Sort:
     # 按值降序
     def useTime_down(self)->dict:
         return {k:v for k,v in sorted(self.all_applications_dict.items(), key=lambda x: x[1]["use_time"], reverse=True)}        
+
+
+# 登录工作线程：在后台调用登录接口，避免网络等待卡住界面
+class LoginWorker(QThread):
+    # 登录成功信号(携带token字符串)
+    login_success = Signal(str)
+    # 登录失败信号(携带错误提示)
+    login_failed = Signal(str)
+
+    def __init__(self, user_email: str, user_password: str, server_url: str):
+        super().__init__()
+        self.user_email = user_email
+        self.user_password = user_password
+        self.server_url = server_url
+
+    def run(self):
+        # 独立创建ApiClient实例，避免与上传线程共用实例产生竞态
+        client = network.ApiClient(base_url=self.server_url)
+        try:
+            token = client.login(self.user_email, self.user_password)
+            self.login_success.emit(token)
+        except network.ApiException as e:
+            self.login_failed.emit(str(e))
+        except Exception as e:
+            logging.error(f"登录异常: {str(e)}")
+            self.login_failed.emit(f"无法连接服务器，请检查网络与服务器地址({e})")
+
+
+# 退出登录工作线程：通知服务器将token加入黑名单(网络异常时忽略错误，本地仍然退出)
+class LogoutWorker(QThread):
+    # 退出登录完成信号(无论服务器是否可达都会发出)
+    logout_finished = Signal()
+
+    def __init__(self, server_url: str, token: str):
+        super().__init__()
+        self.server_url = server_url
+        self.token = token
+
+    def run(self):
+        client = network.ApiClient(base_url=self.server_url, token=self.token)
+        try:
+            client.logout()
+        except Exception as e:
+            logging.warning(f"退出登录请求失败(忽略): {e}")
+        self.logout_finished.emit()
+
 
 # 进程备注文件相关类（初始化、读取、修改）
 class Init_AliasFile:
@@ -392,8 +515,10 @@ class Init_ConfigFile:
 
     # 将数据写回文件（在数据发生修改后使用）
     def wirteback_config(self):
-        with open(self.configFile_path, "w", encoding="utf-8") as file:
-            json.dump(self.config_dict, file, ensure_ascii=False, indent=4)
+        # 加锁防止上传线程与界面线程同时写文件导致损坏
+        with thread_lock:
+            with open(self.configFile_path, "w", encoding="utf-8") as file:
+                json.dump(self.config_dict, file, ensure_ascii=False, indent=4)
             
     # 排序方式
     def get_sort_type(self):
@@ -419,6 +544,39 @@ class Init_ConfigFile:
         return self.auto_setup
     def set_auto_setup(self,auto_setup:bool):
         self.config_dict["auto_setup"] = auto_setup
+        self.wirteback_config()
+
+    # 服务器地址(上传数据的目标服务器，形如 http://localhost:8080)
+    def get_server_url(self):
+        server_url = self.config_dict.get("server_url", None)
+        if server_url is None:
+            self.set_server_url(network.DEFAULT_BASE_URL)
+            return network.DEFAULT_BASE_URL
+        return server_url
+    def set_server_url(self, server_url:str):
+        self.config_dict["server_url"] = server_url
+        self.wirteback_config()
+
+    # 登录邮箱
+    def get_user_email(self):
+        user_email = self.config_dict.get("user_email", None)
+        if user_email is None:
+            self.set_user_email("")
+            return ""
+        return user_email
+    def set_user_email(self, user_email:str):
+        self.config_dict["user_email"] = user_email
+        self.wirteback_config()
+
+    # 登录后获取的JWT token(用于每次上传的Authorization请求头)
+    def get_token(self):
+        token = self.config_dict.get("token", None)
+        if token is None:
+            self.set_token("")
+            return ""
+        return token
+    def set_token(self, token:str):
+        self.config_dict["token"] = token
         self.wirteback_config()
 
 # 主窗口类
@@ -484,6 +642,20 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.thread_auto_save = threading.Thread(target=auto_save_thread, args=(self.all_applications_dict,))
         self.thread_auto_save.daemon = True  # 主线程退出时自动结束
         self.thread_auto_save.start()
+        # 启动数据上传线程(已登录时每秒上传一次数据)
+        self.thread_upload = threading.Thread(target=data_upload_thread, args=(self.all_applications_dict,))
+        self.thread_upload.daemon = True  # 主线程退出时自动结束
+        self.thread_upload.start()
+
+        # 上一次的上传阶段，用于在上传状态变化时向托盘发一次通知
+        self._prev_upload_stage = None
+        # 登录/退出请求进行中标记，防止重复点击或重复打开设置窗口造成多个后台任务
+        self._login_in_progress = False
+        self._logout_in_progress = False
+        # 定时检查上传状态变化(如登录失效/网络中断)，变化时用托盘气泡提示
+        self.upload_notify_timer = QTimer(self)
+        self.upload_notify_timer.timeout.connect(self.check_upload_notification)
+        self.upload_notify_timer.start(2000)
 
     # 退出程序时的确认窗口
     def open_exit_window(self):
@@ -596,7 +768,219 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         else:
             self.settings_ui.checkBox.setChecked(False)
             self.settings_ui.label_3.setText("已关闭")
-    
+
+        # 第二页：账号与数据上传设置
+        self.init_account_setting()
+
+    # 在设置窗口第二页搭建“账号与上传”表单(账号登录/退出、服务器地址、上传状态)
+    def init_account_setting(self):
+        page = self.settings_ui.page_2
+        # 隐藏原“预留选项”页的占位文字
+        self.settings_ui.label_2.hide()
+        # 修改左侧菜单第二项名称
+        list_item = self.settings_ui.listWidget.item(1)
+        if list_item is not None:
+            list_item.setText("账号与上传")
+
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
+
+        title_label = QLabel("登录后开始每秒上传数据", page)
+        title_label.setStyleSheet("font-size:16px;font-weight:bold;")
+        layout.addWidget(title_label)
+
+        # 表单：服务器地址/邮箱/密码
+        form_layout = QFormLayout()
+        self.server_edit = QLineEdit(page)
+        self.server_edit.setPlaceholderText(network.DEFAULT_BASE_URL)
+        self.email_edit = QLineEdit(page)
+        self.email_edit.setPlaceholderText("请输入登录邮箱")
+        self.pass_edit = QLineEdit(page)
+        self.pass_edit.setEchoMode(QLineEdit.Password)
+        self.pass_edit.setPlaceholderText("请输入登录密码")
+        form_layout.addRow("服务器地址:", self.server_edit)
+        form_layout.addRow("邮箱:", self.email_edit)
+        form_layout.addRow("密码:", self.pass_edit)
+        layout.addLayout(form_layout)
+
+        # 登录/退出按钮
+        btn_row = QHBoxLayout()
+        self.login_btn = QPushButton("登录并开始上传", page)
+        self.logout_btn = QPushButton("退出登录", page)
+        btn_row.addWidget(self.login_btn)
+        btn_row.addWidget(self.logout_btn)
+        layout.addLayout(btn_row)
+
+        # 当前上传状态展示
+        self.account_status_label = QLabel("", page)
+        self.account_status_label.setWordWrap(True)
+        layout.addWidget(self.account_status_label)
+
+        hint_label = QLabel(
+            "提示：登录后客户端会每秒向服务器上传一次本机运行中的应用及使用时长。\n"
+            "服务器地址需与后端地址一致，例如 http://localhost:8080", page)
+        hint_label.setWordWrap(True)
+        hint_label.setStyleSheet("color:gray;")
+        layout.addWidget(hint_label)
+        layout.addStretch()
+
+        # 事件绑定
+        self.login_btn.clicked.connect(self.on_login_clicked)
+        self.logout_btn.clicked.connect(self.on_logout_clicked)
+
+        # 预填已保存的服务器地址与邮箱
+        self.server_edit.setText(config_File.get_server_url())
+        self.email_edit.setText(config_File.get_user_email())
+
+        # 每秒刷新一次上传状态(上传线程每秒更新一次)
+        self.account_timer = QTimer(self.settings_window)
+        self.account_timer.timeout.connect(self.refresh_account_status)
+        self.account_timer.start(1000)
+        # 打开设置窗口时立即刷新一次状态
+        self.refresh_account_status()
+
+    # 根据上传线程的实时状态刷新“账号与上传”页展示
+    def refresh_account_status(self):
+        token = config_File.get_token()
+        email = config_File.get_user_email()
+        with upload_lock:
+            stage = upload_stage
+            stage_text = upload_status_text
+            error_text = upload_last_error
+
+        if token:
+            self.login_btn.setEnabled(False)
+            self.logout_btn.setEnabled(True)
+            email_text = email if email else "未知邮箱"
+            if stage == "ok":
+                self.account_status_label.setText(f"已登录：{email_text}\n{stage_text}")
+            elif stage == "error":
+                self.account_status_label.setText(f"已登录：{email_text}\n{stage_text}：{error_text}")
+            elif stage == "not_login":
+                self.account_status_label.setText(f"已登录：{email_text}\n正在启动上传…")
+            else:
+                self.account_status_label.setText(f"已登录：{email_text}\n当前状态：{stage_text}")
+        else:
+            self.login_btn.setEnabled(True)
+            self.logout_btn.setEnabled(False)
+            if stage == "invalid":
+                self.account_status_label.setText(f"登录已失效，请重新登录\n({error_text})")
+            else:
+                self.account_status_label.setText("未登录（登录后每秒自动上传数据）")
+
+    # 点击“登录并开始上传”
+    def on_login_clicked(self):
+        # 上一次登录请求仍在进行中则忽略本次点击
+        if self._login_in_progress:
+            self.account_status_label.setText("正在登录，请稍候…")
+            return
+
+        user_email = self.email_edit.text().strip()
+        user_password = self.pass_edit.text()
+        server_url = self.server_edit.text().strip() or network.DEFAULT_BASE_URL
+
+        if not user_email or "@" not in user_email:
+            self.account_status_label.setText("请输入正确的邮箱")
+            return
+        if not user_password:
+            self.account_status_label.setText("请输入登录密码")
+            return
+
+        # 保存服务器地址(其余信息登录成功后再保存)
+        config_File.set_server_url(server_url)
+        self._login_in_progress = True
+        self.login_btn.setEnabled(False)
+        self.account_status_label.setText("正在登录，请稍候…")
+
+        # 后台线程调用登录接口，避免网络等待卡住界面
+        self.login_worker = LoginWorker(user_email, user_password, server_url)
+        self.login_worker.login_success.connect(
+            lambda token: self.on_login_success(user_email, server_url, token))
+        self.login_worker.login_failed.connect(self.on_login_failed)
+        self.login_worker.start()
+
+    # 登录成功回调
+    def on_login_success(self, user_email: str, server_url: str, token: str):
+        self._login_in_progress = False
+        # 保存登录信息到本地配置(上传线程每秒读取)
+        config_File.set_server_url(server_url)
+        config_File.set_user_email(user_email)
+        config_File.set_token(token)
+        self.pass_edit.clear()
+        self.account_status_label.setText("登录成功，开始每秒上传数据…")
+        # 托盘气泡提示
+        self.tray_icon.showMessage("屏幕视奸器", "登录成功，开始每秒上传数据", QSystemTrayIcon.Information, 3000)
+        self.refresh_account_status()
+
+    # 登录失败回调
+    def on_login_failed(self, error_message: str):
+        self._login_in_progress = False
+        self.login_btn.setEnabled(True)
+        self.account_status_label.setText(f"登录失败：{error_message}")
+        # 托盘气泡提示
+        self.tray_icon.showMessage("屏幕视奸器", f"登录失败：{error_message}", QSystemTrayIcon.Warning, 3000)
+
+    # 点击“退出登录”
+    def on_logout_clicked(self):
+        # 上一次退出请求仍在进行中则忽略本次点击
+        if self._logout_in_progress:
+            self.account_status_label.setText("正在退出登录…")
+            return
+
+        token = config_File.get_token()
+        server_url = config_File.get_server_url()
+
+        self._logout_in_progress = True
+        self.logout_btn.setEnabled(False)
+        self.login_btn.setEnabled(False)
+        self.account_status_label.setText("正在退出登录…")
+
+        # 后台线程通知服务器使token失效；无论成败都清除本地登录信息
+        self.logout_worker = LogoutWorker(server_url, token)
+        self.logout_worker.logout_finished.connect(self.on_logout_finished)
+        self.logout_worker.start()
+
+    # 退出登录完成回调(通知服务器失败时也照常清除本地信息)
+    def on_logout_finished(self):
+        self._logout_in_progress = False
+        config_File.set_token("")
+        config_File.set_user_email("")
+        with upload_lock:
+            stage = upload_stage
+        # 若此前正处于“登录失效”状态，需要复位阶段标记便于重新登录
+        if stage == "invalid":
+            set_upload_stage("not_login", "未登录", "")
+        self.tray_icon.showMessage("屏幕视奸器", "已退出登录，停止上传数据", QSystemTrayIcon.Information, 3000)
+        self.refresh_account_status()
+
+    # 定时检查上传状态变化，仅在状态切换时向托盘发一次通知，避免反复弹窗
+    def check_upload_notification(self):
+        with upload_lock:
+            stage = upload_stage
+            error_text = upload_last_error
+        prev_stage = self._prev_upload_stage
+        self._prev_upload_stage = stage
+
+        # 首次运行(prev为None)不通知
+        if prev_stage is None:
+            return
+        if prev_stage == stage:
+            return
+
+        if stage == "invalid":
+            # 已登录状态变为登录失效(如token过期)
+            self.tray_icon.showMessage("屏幕视奸器", "登录已失效，请打开设置重新登录",
+                                       QSystemTrayIcon.Warning, 3000)
+        elif stage == "error" and prev_stage in ("ok", "not_login"):
+            # 首次上传失败(网络中断等)
+            self.tray_icon.showMessage("屏幕视奸器", f"数据上传失败：{error_text}",
+                                       QSystemTrayIcon.Warning, 3000)
+        elif stage == "ok" and prev_stage == "error":
+            # 网络恢复
+            self.tray_icon.showMessage("屏幕视奸器", "网络已恢复，继续上传数据",
+                                       QSystemTrayIcon.Information, 3000)
+
     # 初始化数据，若存在当天数据则读取，而不是从空开始
     def init_data(self):
         date_str = time.strftime("%Y-%m-%d", time.localtime()) # 获取当前日期字符串

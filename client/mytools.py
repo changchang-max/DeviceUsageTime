@@ -172,6 +172,46 @@ def remove_from_startup(name):
         print("该启动项不存在")
     winreg.CloseKey(reg_key)
 
+# 获取当前屏幕最顶端(前台)窗口对应的进程名与窗口标题
+# 返回值：(进程名, 窗口标题)，失败或无前台窗口时返回 (None, None)
+def get_foreground_window_info():
+    # 仅在Windows下可用，且依赖psutil获取进程名，因此延迟导入避免模块间耦合
+    try:
+        import ctypes
+        import psutil
+    except ImportError:
+        return None, None
+
+    try:
+        user32 = ctypes.windll.user32
+
+        # 获取前台窗口句柄
+        hwnd = user32.GetForegroundWindow()
+        if not hwnd:
+            return None, None
+
+        # 获取该窗口所属进程的PID
+        pid = ctypes.c_ulong()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+
+        # 获取窗口标题(先取长度再取内容，避免中文截断)
+        title_length = user32.GetWindowTextLengthW(hwnd)
+        title_buffer = ctypes.create_unicode_buffer(title_length + 1)
+        user32.GetWindowTextW(hwnd, title_buffer, title_length + 1)
+        window_title = title_buffer.value.strip()
+
+        # 由PID得到进程名(与psutil扫描结果格式一致，如 xxx.exe)
+        process_name = None
+        try:
+            process_name = psutil.Process(pid.value).name()
+        except (psutil.AccessDenied, psutil.NoSuchProcess):
+            pass
+
+        return process_name, window_title
+    except Exception as e:
+        print(f"获取前台窗口信息失败: {e}")
+        return None, None
+
 if __name__ == "__main__":
     if not get_fileExtensionName("aaa"):
         print("不存在.")
