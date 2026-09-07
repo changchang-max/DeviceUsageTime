@@ -48,6 +48,9 @@ public class SecurityConfig {
                                         "/api/auth/register",
                                         "/api/auth/sendCode",
                                         "/api/auth/verify-key",
+                                        // 修改密码接口同时支持已登录(Token认证)与未登录(请求体传user_email)两种场景，
+                                        // 因此需放行匿名访问，是否携带Token由Controller/Service层自行判断
+                                        "/api/auth/change-password",
                                         "/ws/**",
                                         // 数据查询接口支持秘钥认证(无token)，在Controller/Service层手动校验身份
                                         "/api/data/realtime",
@@ -58,7 +61,7 @@ public class SecurityConfig {
                                 // ========== ROLE_USER角色专属接口 ==========
                                 .requestMatchers(
                                         "/api/auth/logout",
-                                        "/api/auth/deregister",
+                                        "/api/auth/deregister",//注销用户
                                         "/api/data/upload",
                                         "/index/home",
                                         "/api/user/**"

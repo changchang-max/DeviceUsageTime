@@ -63,6 +63,12 @@
         where user_email = #{email}
     </update>
 
+    <update id="updatePassword">
+        update user_auth
+        set user_password = #{user_password}
+        where user_email = #{email}
+    </update>
+
     <select id="selectProfileByEmail"
             resultType="UserAuthEntity">
         select user_email,user_key,user_name,created_at,last_login_at
