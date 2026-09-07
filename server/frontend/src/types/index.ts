@@ -28,6 +28,17 @@ export interface RegisterRequest {
   code: string
 }
 
+// 修改密码请求体(字段名与后端 ChangePasswordDTO 保持一致; 已登录时 user_email 可省略)
+export interface ChangePasswordRequest {
+  old_password: string
+  new_password: string
+}
+
+// 注销账号请求体(字段名与后端 DeregisterDTO 保持一致)
+export interface DeregisterRequest {
+  user_password: string
+}
+
 // 秘钥验证返回数据(后端 VerifyKeyVO)
 export interface VerifyKeyData {
   userName: string

@@ -95,19 +95,162 @@
           </div>
         </div>
       </el-card>
+
+      <el-card class="account-card">
+        <template #header>
+          <h2>账号安全</h2>
+        </template>
+
+        <div class="account-content">
+          <div class="account-tip">
+            管理登录密码与账号。注销账号将<em>永久删除账号及全部关联数据,无法恢复</em>。
+          </div>
+          <div class="account-actions">
+            <el-button
+              type="primary"
+              @click="handleOpenChangePassword"
+            >
+              修改密码
+            </el-button>
+            <el-button
+              type="danger"
+              plain
+              @click="handleDeregister"
+            >
+              注销用户
+            </el-button>
+          </div>
+        </div>
+      </el-card>
     </div>
+
+    <!-- 修改密码弹窗 -->
+    <el-dialog
+      v-model="changePasswordVisible"
+      title="修改密码"
+      width="420px"
+      :close-on-click-modal="false"
+      @closed="resetChangePasswordForm"
+    >
+      <el-form
+        ref="changePasswordFormRef"
+        :model="changePasswordForm"
+        :rules="changePasswordRules"
+        label-position="top"
+      >
+        <el-form-item label="原密码" prop="old_password">
+          <el-input
+            v-model="changePasswordForm.old_password"
+            type="password"
+            placeholder="请输入当前密码"
+            show-password
+            autocomplete="current-password"
+          />
+        </el-form-item>
+        <el-form-item label="新密码" prop="new_password">
+          <el-input
+            v-model="changePasswordForm.new_password"
+            type="password"
+            placeholder="至少8位,包含字母和数字"
+            show-password
+            autocomplete="new-password"
+            @keyup.enter="handleSubmitChangePassword"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="changePasswordVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="changePasswordLoading"
+          @click="handleSubmitChangePassword"
+        >
+          确定
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 注销用户:第一步 输入登录密码 -->
+    <el-dialog
+      v-model="deregisterPasswordVisible"
+      title="注销用户"
+      width="420px"
+      :close-on-click-modal="false"
+    >
+      <div class="deregister-tip">
+        注销前需验证身份,请输入您的登录密码。
+      </div>
+      <el-form @submit.prevent>
+        <el-form-item label="登录密码">
+          <el-input
+            v-model="deregisterPassword"
+            type="password"
+            placeholder="请输入登录密码"
+            show-password
+            autocomplete="current-password"
+            @keyup.enter="handleNextDeregister"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="handleCancelDeregisterPassword">取消</el-button>
+        <el-button
+          type="danger"
+          @click="handleNextDeregister"
+        >
+          下一步
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 注销用户:第二步 不可恢复确认 -->
+    <el-dialog
+      v-model="deregisterConfirmVisible"
+      title="确认注销"
+      width="420px"
+      :close-on-click-modal="false"
+    >
+      <div class="deregister-warning">
+        <p>
+          注销后,当前账号及其全部数据将被<b>永久删除</b>,<b>账户不可恢复</b>。
+          确定要继续注销吗?
+        </p>
+      </div>
+      <template #footer>
+        <el-button @click="handleCancelDeregisterConfirm">再想想</el-button>
+        <el-button
+          type="danger"
+          :loading="deregisterLoading"
+          @click="handleConfirmDeregister"
+        >
+          确认注销
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { regenerateKeyApi, revokeKeyApi } from '@/api'
+import {
+  changePasswordApi,
+  deregisterApi,
+  regenerateKeyApi,
+  revokeKeyApi
+} from '@/api'
 import { formatDateTime } from '@/utils/format'
 import AppHeader from '@/components/AppHeader.vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  ElMessage,
+  ElMessageBox,
+  type FormInstance,
+  type FormRules
+} from 'element-plus'
 import { DocumentCopy } from '@element-plus/icons-vue'
 
+const router = useRouter()
 const userStore = useUserStore()
 
 const shareLink = computed(() => {
@@ -177,6 +320,134 @@ const handleRevokeKey = async () => {
   }
 }
 
+// ===== 账号安全:修改密码 =====
+const changePasswordVisible = ref(false)
+const changePasswordLoading = ref(false)
+const changePasswordFormRef = ref<FormInstance>()
+const changePasswordForm = reactive({
+  old_password: '',
+  new_password: ''
+})
+
+// 新密码校验:至少8位且同时包含字母和数字(与后端校验规则保持一致)
+const validateNewPassword = (rule: unknown, value: string, callback: (error?: Error) => void) => {
+  if (!value) {
+    callback(new Error('请输入新密码'))
+  } else if (value.length < 8) {
+    callback(new Error('密码至少8位'))
+  } else if (!/[a-zA-Z]/.test(value) || !/[0-9]/.test(value)) {
+    callback(new Error('密码必须包含字母和数字'))
+  } else if (value === changePasswordForm.old_password) {
+    callback(new Error('新密码不能与原密码相同'))
+  } else {
+    callback()
+  }
+}
+
+const changePasswordRules: FormRules = {
+  old_password: [
+    { required: true, message: '请输入原密码', trigger: 'blur' }
+  ],
+  new_password: [
+    { required: true, validator: validateNewPassword, trigger: 'blur' }
+  ]
+}
+
+const handleOpenChangePassword = () => {
+  resetChangePasswordForm()
+  changePasswordVisible.value = true
+}
+
+const resetChangePasswordForm = () => {
+  changePasswordForm.old_password = ''
+  changePasswordForm.new_password = ''
+  changePasswordFormRef.value?.clearValidate()
+}
+
+// 修改密码成功后后端已使当前Token立即失效,清空本地会话并跳回登录页重新登录
+const handleSubmitChangePassword = async () => {
+  if (!changePasswordFormRef.value) return
+  
+  await changePasswordFormRef.value.validate(async (valid) => {
+    if (!valid) return
+    
+    changePasswordLoading.value = true
+    try {
+      await changePasswordApi({
+        old_password: changePasswordForm.old_password,
+        new_password: changePasswordForm.new_password
+      })
+      ElMessage.success('密码修改成功,请重新登录')
+      changePasswordVisible.value = false
+      clearSessionAndGoLogin()
+    } catch {
+      // 原密码错误等提示已由请求拦截器统一弹出,弹窗保持打开以便重试
+    } finally {
+      changePasswordLoading.value = false
+    }
+  })
+}
+
+// ===== 账号安全:注销用户 =====
+const deregisterPasswordVisible = ref(false)
+const deregisterConfirmVisible = ref(false)
+const deregisterPassword = ref('')
+const deregisterLoading = ref(false)
+
+const handleDeregister = () => {
+  deregisterPassword.value = ''
+  deregisterPasswordVisible.value = true
+}
+
+// 第一步:输入密码通过后,弹出第二步"账户不可恢复"确认框
+const handleNextDeregister = () => {
+  if (!deregisterPassword.value) {
+    ElMessage.warning('请输入登录密码')
+    return
+  }
+  deregisterPasswordVisible.value = false
+  deregisterConfirmVisible.value = true
+}
+
+const handleCancelDeregisterPassword = () => {
+  deregisterPassword.value = ''
+  deregisterPasswordVisible.value = false
+}
+
+const handleCancelDeregisterConfirm = () => {
+  deregisterPassword.value = ''
+  deregisterConfirmVisible.value = false
+}
+
+// 第二步:用户确认"不可恢复"后真正执行注销
+const handleConfirmDeregister = async () => {
+  deregisterLoading.value = true
+  try {
+    await deregisterApi({
+      user_password: deregisterPassword.value
+    })
+    ElMessage.success('账号已注销')
+    deregisterConfirmVisible.value = false
+    deregisterPassword.value = ''
+    clearSessionAndGoLogin()
+  } catch {
+    // 密码错误等提示已由请求拦截器统一弹出;回到第一步让用户重新输入密码
+    deregisterConfirmVisible.value = false
+    deregisterPasswordVisible.value = true
+  } finally {
+    deregisterLoading.value = false
+  }
+}
+
+// 清空本地会话状态并跳转登录页(注销/改密成功后Token已失效)
+const clearSessionAndGoLogin = () => {
+  userStore.token = ''
+  userStore.userInfo = null
+  localStorage.removeItem('token')
+  localStorage.removeItem('user')
+  router.replace('/login')
+}
+
 onMounted(async () => {
   if (!userStore.userInfo) {
     await userStore.fetchUserInfo()
@@ -200,12 +471,14 @@ onMounted(async () => {
 }
 
 .profile-card,
-.secret-card {
+.secret-card,
+.account-card {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 }
 
 .profile-card h2,
-.secret-card h2 {
+.secret-card h2,
+.account-card h2 {
   margin: 0;
   font-size: 20px;
   color: #303133;
@@ -248,5 +521,43 @@ onMounted(async () => {
   margin-top: 8px;
   font-size: 12px;
   color: #909399;
+}
+
+.account-content {
+  padding: 0;
+}
+
+.account-tip {
+  font-size: 14px;
+  color: #606266;
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+
+.account-tip em {
+  color: #f56c6c;
+  font-style: normal;
+}
+
+.account-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.deregister-tip {
+  font-size: 14px;
+  color: #606266;
+  margin-bottom: 16px;
+}
+
+.deregister-warning p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.8;
+  color: #606266;
+}
+
+.deregister-warning b {
+  color: #f56c6c;
 }
 </style>
