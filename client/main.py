@@ -377,6 +377,14 @@ def save_data(data:dict):
     for title, proc_info in data.items():
         simple_data[title] = proc_info["use_time"]
 
+    # 附加输入统计计数器（_statistics 键以下划线开头，不会与进程名冲突）
+    with input_lock:
+        simple_data["_statistics"] = {
+            "keyboardCount": keyboard_count,
+            "mouseClickCount": mouse_click_count,
+            "mouseDistance": round(mouse_distance_px * PIXEL_TO_METER, 2),
+        }
+
     # 覆盖写入
     file_name = pathlib.Path(f"./history_data/data_{current_date}.json")
 
@@ -1077,6 +1085,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
     # 初始化数据，若存在当天数据则读取，而不是从空开始
     def init_data(self):
+        global keyboard_count, mouse_click_count, mouse_distance_px
         date_str = time.strftime("%Y-%m-%d", time.localtime()) # 获取当前日期字符串
         file_name = f"./history_data/data_{date_str}.json"
         p = pathlib.Path(file_name)
@@ -1084,6 +1093,13 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             # 读取json文件
             with open(file_name, "r", encoding="utf-8") as file:
                 simple_data = json.load(file)
+                # 还原输入统计计数器（兼容无 _statistics 键的旧格式文件）
+                stats = simple_data.pop("_statistics", {})
+                with input_lock:
+                    keyboard_count = int(stats.get("keyboardCount", 0))
+                    mouse_click_count = int(stats.get("mouseClickCount", 0))
+                    # mouseDistance 存储的是米，换算回像素存入 mouse_distance_px
+                    mouse_distance_px = float(stats.get("mouseDistance", 0.0)) / PIXEL_TO_METER
                 # 转换为程序内部使用的复杂格式
                 self.all_applications_dict = {}
                 for title, use_time in simple_data.items():
