@@ -19,7 +19,7 @@
       </div>
     </template>
 
-    <!-- 无数据 -->
+    <!-- 无数据: 没有任何有时长的应用(此时即使有0时长的新活跃应用也不展示, 等其产生时长后自然进入列表) -->
     <el-empty v-if="itemsTotalDuration <= 0" description="暂无数据" :image-size="90" />
 
     <template v-else>
@@ -61,7 +61,12 @@
 
       <!-- 应用排行列表 -->
       <transition-group name="rank" tag="div" class="app-list">
-        <div v-for="item in sortedItems" :key="item.name" class="app-item">
+        <div
+          v-for="item in sortedItems"
+          :key="item.name"
+          class="app-item"
+          :class="{ 'is-active': isItemPinned(item) }"
+        >
           <div class="app-item-main">
             <span
               class="app-name"
@@ -146,7 +151,7 @@ const positiveItems = computed<RankingItem[]>(() =>
   props.items.filter(item => item.duration > 0)
 )
 
-// 各应用时长总和(秒): 仅用于"空态判断/单个应用占比"等相对计算,
+// 各应用时长总和(秒): 仅用于"单个应用占比"等相对计算,
 // 不再作为卡片顶部"总时长"展示(多应用并发运行时会成倍虚高)
 const itemsTotalDuration = computed<number>(() =>
   positiveItems.value.reduce((sum, item) => sum + item.duration, 0)
@@ -171,9 +176,6 @@ const mostUsedName = computed<string>(() => {
   return top?.name || ''
 })
 
-// 应用数量
-const itemCount = computed<number>(() => positiveItems.value.length)
-
 // 进度条基准: 以最长使用应用为满格,条长只反映应用间的相对时长
 const maxDuration = computed<number>(() => {
   let max = 0
@@ -185,35 +187,53 @@ const maxDuration = computed<number>(() => {
   return max
 })
 
-// 排序后的应用列表
+// 是否为"当前正在使用"的应用(桌面最顶端窗口), 实时视图下才存在该状态
+const isItemPinned = (item: RankingItem): boolean =>
+  props.showStatus && item.isActive === true
+
+// 排序后的应用列表。
+// "当前正在使用"的应用(isActive=true)始终置顶, 其余应用仍按所选排序方式排列。
+// 新切换的应用即使时长尚为0也立即置顶展示, 保证切换瞬间在列表中最先可见。
 const sortedItems = computed<RankingItem[]>(() => {
-  const list = [...positiveItems.value]
+  const rest = positiveItems.value.filter(item => !isItemPinned(item))
   const collator = new Intl.Collator('zh-Hans-CN', { numeric: true })
   switch (sortMode.value) {
     case 'name-asc':
-      list.sort((a, b) => collator.compare(a.name, b.name))
+      rest.sort((a, b) => collator.compare(a.name, b.name))
       break
     case 'name-desc':
-      list.sort((a, b) => collator.compare(b.name, a.name))
+      rest.sort((a, b) => collator.compare(b.name, a.name))
       break
     case 'time-asc':
-      list.sort((a, b) => a.duration - b.duration || collator.compare(a.name, b.name))
+      rest.sort((a, b) => a.duration - b.duration || collator.compare(a.name, b.name))
       break
     case 'time-desc':
-      list.sort((a, b) => b.duration - a.duration || collator.compare(a.name, b.name))
+      rest.sort((a, b) => b.duration - a.duration || collator.compare(a.name, b.name))
       break
   }
-  return list
+
+  const active = props.items.find(item => isItemPinned(item))
+  if (active) {
+    rest.unshift(active)
+  }
+  return rest
 })
+
+// 应用数量(以实际展示的行数为准: 含置顶的"当前正在使用"应用)
+const itemCount = computed<number>(() => sortedItems.value.length)
 
 // 运行状态对应的应用名称样式类(仅实时视图开启状态配色时生效)
 const statusClassOf = (item: RankingItem): string => {
   if (!props.showStatus) {
     return ''
   }
+  if (item.isActive === true) {
+    // 桌面最顶端窗口(当前正在使用): 绿色加粗(最优先)
+    return 'status-active'
+  }
   if (item.isRunning === true) {
-    // 仍在运行: 是桌面最顶端窗口时为绿色(特例), 否则为后台运行的蓝色
-    return item.isActive === true ? 'status-active' : 'status-running'
+    // 仍在运行(非最顶端): 后台运行的蓝色
+    return 'status-running'
   }
   // isRunning为false或缺失(历史/旧数据)时一律按"已关闭"灰色处理
   return 'status-closed'
@@ -369,15 +389,34 @@ const barWidthOf = (item: RankingItem): string => {
 .app-list {
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .app-item {
   padding: 10px 4px;
   border-bottom: 1px solid #f0f2f5;
+  /* 置顶/取消置顶时, 高亮底色与边框光效平滑过渡(布局位移交由FLIP动画处理) */
+  transition:
+    background-color 0.45s ease,
+    border-color 0.45s ease,
+    box-shadow 0.45s ease;
 }
 
 .app-item:last-child {
   border-bottom: none;
+}
+
+/* "当前正在使用"的应用(置顶行): 绿色柔光边框 + 柔和浅绿底色, 与其他行明显区分。
+   app-active-in负责置顶瞬间的"点亮"效果, app-active-glow负责常驻的呼吸光效 */
+.app-item.is-active {
+  margin: 8px 0;
+  padding: 12px 4px;
+  border: 1px solid rgba(103, 194, 58, 0.55);
+  border-radius: 10px;
+  background-color: rgba(103, 194, 58, 0.1);
+  animation:
+    app-active-in 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+    app-active-glow 3s ease-in-out 0.6s infinite;
 }
 
 .app-item-main {
@@ -468,9 +507,62 @@ const barWidthOf = (item: RankingItem): string => {
   font-variant-numeric: tabular-nums;
 }
 
-/* 排序变化时的位移过渡 */
+/* 排序/置顶变化时的位移过渡(FLIP): 略带回弹缓动, 切换明显且流畅 */
 .rank-move {
-  transition: transform 0.3s ease;
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* 新应用进入/退出列表 */
+.rank-enter-active {
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.rank-enter-from {
+  opacity: 0;
+  transform: translateY(-12px);
+}
+
+.rank-leave-active {
+  position: absolute;
+  left: 0;
+  right: 0;
+  transition: opacity 0.25s ease;
+}
+
+.rank-leave-to {
+  opacity: 0;
+}
+
+/* 置顶行点亮动画: 短暂增强的光晕后回落到常态, 让"正在使用的应用"切换一目了然 */
+@keyframes app-active-in {
+  0% {
+    background-color: rgba(103, 194, 58, 0.03);
+    border-color: rgba(103, 194, 58, 0.2);
+    box-shadow: 0 0 0 rgba(103, 194, 58, 0);
+  }
+  60% {
+    background-color: rgba(103, 194, 58, 0.24);
+    border-color: rgba(103, 194, 58, 1);
+    box-shadow: 0 0 22px rgba(103, 194, 58, 0.65), 0 1px 6px rgba(103, 194, 58, 0.3);
+  }
+  100% {
+    background-color: rgba(103, 194, 58, 0.1);
+    border-color: rgba(103, 194, 58, 0.55);
+    box-shadow: 0 0 8px rgba(103, 194, 58, 0.25);
+  }
+}
+
+/* 置顶行常驻呼吸光效: 边框与柔光在高低强度间平缓变化 */
+@keyframes app-active-glow {
+  0%,
+  100% {
+    border-color: rgba(103, 194, 58, 0.55);
+    box-shadow: 0 0 8px rgba(103, 194, 58, 0.25), 0 1px 4px rgba(103, 194, 58, 0.1);
+  }
+  50% {
+    border-color: rgba(103, 194, 58, 0.95);
+    box-shadow: 0 0 16px rgba(103, 194, 58, 0.5), 0 1px 6px rgba(103, 194, 58, 0.22);
+  }
 }
 
 /* 底部统计 */
