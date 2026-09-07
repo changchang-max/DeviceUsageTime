@@ -1,6 +1,7 @@
 import threading
 import time
 import sys
+import math
 from PySide2.QtWidgets import QApplication, QMainWindow,QSystemTrayIcon
 from ui_mainWindow import Ui_MainWindow
 from ui_settings import Ui_Settings
@@ -62,6 +63,23 @@ upload_lock = threading.Lock()
 # 全局唯一的API客户端(登录后在登录worker里单独创建实例，避免与上传线程交叉使用)
 api_client = network.ApiClient()
 
+# ==================== 输入统计计数器 ====================
+# 键盘敲击累计次数（今天累计，跨天时随 all_applications_dict 一起重置）
+keyboard_count: int = 0
+# 鼠标点击累计次数（左键/右键/中键，不含滚轮滚动）
+mouse_click_count: int = 0
+# 鼠标移动累计距离（像素），换算为米时乘以 PIXEL_TO_METER
+mouse_distance_px: float = 0.0
+# 上一次鼠标坐标，用于计算位移；None 表示尚未记录
+_last_mouse_pos: tuple = None
+# 滚轮滚动累计量（以 WHEEL_DELTA=120 为单位的绝对值之和）
+mouse_scroll_delta: float = 0.0
+# 1 像素 ≈ 0.000265 m（按 96dpi 近似），滚轮每个 WHEEL_DELTA 对应约 48px
+PIXEL_TO_METER: float = 0.000140625
+SCROLL_PX_PER_DELTA: float = 3.0     # 每个最小滚动单位(1格)等效像素数(近似)
+# 保护输入计数器的锁（pynput 回调线程 vs 上传线程 vs 跨天重置）
+input_lock = threading.Lock()
+
 
 # 更新上传状态(供上传线程调用)
 def set_upload_stage(stage: str, text: str, error: str = ""):
@@ -70,6 +88,67 @@ def set_upload_stage(stage: str, text: str, error: str = ""):
         upload_stage = stage
         upload_status_text = text
         upload_last_error = error
+
+
+# ==================== pynput 输入监听回调 ====================
+
+def _on_key_press(key):
+    """键盘按键按下时累计计数（所有按键均计入）"""
+    global keyboard_count
+    with input_lock:
+        keyboard_count += 1
+
+
+def _on_mouse_click(x, y, button, pressed):
+    """鼠标按键按下时累计计数（左键/右键/中键，不含滚轮滚动）"""
+    global mouse_click_count
+    if pressed:   # 只在按下时计数，松开不计
+        with input_lock:
+            mouse_click_count += 1
+
+
+def _on_mouse_move(x, y):
+    """鼠标移动时累计平面位移（像素）"""
+    global mouse_distance_px, _last_mouse_pos
+    with input_lock:
+        if _last_mouse_pos is not None:
+            dx = x - _last_mouse_pos[0]
+            dy = y - _last_mouse_pos[1]
+            mouse_distance_px += math.sqrt(dx * dx + dy * dy)
+        _last_mouse_pos = (x, y)
+
+
+def _on_mouse_scroll(x, y, dx, dy):
+    """滚轮滚动时累计等效像素距离（dy 为垂直滚动量，dx 为水平滚动量）"""
+    global mouse_distance_px
+    # |dx| + |dy| 通常每格为 1，换算为等效像素后累加到总移动距离
+    with input_lock:
+        mouse_distance_px += (abs(dx) + abs(dy)) * SCROLL_PX_PER_DELTA
+
+
+def get_mouse_distance_meters() -> float:
+    """返回当前累计鼠标移动距离（米），保留两位小数"""
+    with input_lock:
+        return round(mouse_distance_px * PIXEL_TO_METER, 2)
+
+
+def start_input_listeners():
+    """启动 pynput 全局键盘和鼠标监听器（守护线程，随主线程退出自动销毁）"""
+    try:
+        from pynput import keyboard as _kb, mouse as _ms
+        kb_listener = _kb.Listener(on_press=_on_key_press)
+        ms_listener = _ms.Listener(
+            on_click=_on_mouse_click,
+            on_move=_on_mouse_move,
+            on_scroll=_on_mouse_scroll,
+        )
+        kb_listener.daemon = True
+        ms_listener.daemon = True
+        kb_listener.start()
+        ms_listener.start()
+        logging.info("pynput 输入监听器已启动")
+    except Exception as e:
+        logging.error(f"pynput 输入监听器启动失败: {e}")
 
 
 # 过滤系统路径
@@ -160,6 +239,13 @@ def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict,the_old_
                 all_applications_dict.clear()#清空字典
                 tableWidget.setRowCount(0)#清空表单
                 current_date = new_date
+            # 跨天时同步重置输入统计计数器
+            global keyboard_count, mouse_click_count, mouse_distance_px, _last_mouse_pos
+            with input_lock:
+                keyboard_count = 0
+                mouse_click_count = 0
+                mouse_distance_px = 0.0
+                _last_mouse_pos = None
 
 
         # 加上线程锁防止资源竞争
@@ -334,8 +420,14 @@ def data_upload_thread(all_applications_dict: dict):
                 continue
             # 获取当前屏幕最顶端窗口的进程名与标题(用于标记isActive与windowTitle)
             foreground_name, foreground_title = mytools.get_foreground_window_info()
+            # 读取输入统计计数器快照（在锁内复制，避免与pynput回调线程竞争）
+            with input_lock:
+                kb_count = keyboard_count
+                mc_count = mouse_click_count
+                md_meters = round(mouse_distance_px * PIXEL_TO_METER, 2)
             upload_data = network.build_upload_payload(
-                snapshot, running_apps, foreground_name, foreground_title, user_email)
+                snapshot, running_apps, foreground_name, foreground_title, user_email,
+                kb_count, mc_count, md_meters)
             api_client.upload(upload_data)
             set_upload_stage("ok", f"已连接，上次上传 {mytools.hour()}", "")
         except network.ApiException as e:
@@ -646,6 +738,8 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.thread_upload = threading.Thread(target=data_upload_thread, args=(self.all_applications_dict,))
         self.thread_upload.daemon = True  # 主线程退出时自动结束
         self.thread_upload.start()
+        # 启动全局键盘/鼠标输入监听器，采集键盘敲击、鼠标点击和移动距离
+        start_input_listeners()
 
         # 上一次的上传阶段，用于在上传状态变化时向托盘发一次通知
         self._prev_upload_stage = None

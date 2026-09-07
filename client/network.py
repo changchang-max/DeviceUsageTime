@@ -137,7 +137,10 @@ def trim_process_name(process_name: str) -> str:
 
 def build_upload_payload(app_snapshot: dict, running_apps: set,
                          foreground_name: str = None, foreground_title: str = None,
-                         user_email: str = "") -> dict:
+                         user_email: str = "",
+                         keyboard_count: int = 0,
+                         mouse_click_count: int = 0,
+                         mouse_distance: float = 0.0) -> dict:
     """把客户端内部监控数据组装成 前后端API文档 5.1 的增量上传JSON结构。
 
     :param app_snapshot: 内部字典快照，形如 {进程名: {"pid":..,"title":..,"use_time":..}}
@@ -145,6 +148,9 @@ def build_upload_payload(app_snapshot: dict, running_apps: set,
     :param foreground_name: 屏幕最顶端窗口所在进程名(用于标记isActive)
     :param foreground_title: 屏幕最顶端窗口标题(仅前台应用携带)
     :param user_email: 登录用户邮箱
+    :param keyboard_count: 键盘敲击累计次数
+    :param mouse_click_count: 鼠标点击累计次数（左/右/中键，不含滚轮滚动）
+    :param mouse_distance: 鼠标移动累计距离（米），保留两位小数
     """
     applications = []
     for name in running_apps:
@@ -169,6 +175,9 @@ def build_upload_payload(app_snapshot: dict, running_apps: set,
         "userEmail": user_email,
         "timestamp": now_iso_timestamp(),
         "applications": applications,
-        # 键盘敲击/鼠标点击/鼠标移动距离统计尚未实现，暂不上传statistics字段，
-        # 服务端收到null时不会覆盖已有的统计数据
+        "statistics": {
+            "keyboardCount": keyboard_count,
+            "mouseClickCount": mouse_click_count,
+            "mouseDistance": mouse_distance,
+        },
     }

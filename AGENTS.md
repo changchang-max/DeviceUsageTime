@@ -93,6 +93,9 @@ npm run preview
   - 变量/函数：`snake_case`（如 `all_applications_dict`）
   - 类名：`PascalCase`（如 `MainWindow`）
 - **格式化**：无特定工具，保持现有代码风格一致
+- **环境**：
+  - 运行程序时使用conda的`DeviceUsageTime`环境。
+  - 切换命令：`conda activate DeviceUsageTime`
 
 ### Java 后端
 
