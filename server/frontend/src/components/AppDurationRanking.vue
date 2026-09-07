@@ -20,12 +20,12 @@
     </template>
 
     <!-- 无数据 -->
-    <el-empty v-if="totalDuration <= 0" description="暂无数据" :image-size="90" />
+    <el-empty v-if="itemsTotalDuration <= 0" description="暂无数据" :image-size="90" />
 
     <template v-else>
-      <!-- 总时长摘要 -->
+      <!-- 总时长摘要(展示客户端程序运行时长, 而非应用时长总和) -->
       <div class="summary-block">
-        <div class="summary-total">{{ formatDurationText(totalDuration) }}</div>
+        <div class="summary-total">{{ formatDurationText(displayTotalDuration) }}</div>
         <div
           v-if="trendInfo"
           class="summary-trend"
@@ -125,11 +125,15 @@ const props = withDefaults(defineProps<{
   title: string
   // 应用使用时长列表(时长单位: 秒, 未排序)
   items: RankingItem[]
-  // 前一天总使用时长(秒); 为 null 时不显示"比昨天"对比行
+  // 今日总时长(秒): 客户端程序今日运行时长(≈设备总使用时长), 由统计数据totalDuration提供。
+  // 缺失或为0(旧客户端/旧历史数据未采集该指标)时, 组件回退为应用时长总和
+  totalDuration?: number | null
+  // 前一天总时长(秒)(与totalDuration同口径: 前一日客户端运行时长); 为 null 时不显示"比昨天"对比行
   previousDuration?: number | null
   // 是否展示"顶端窗口/后台运行/已关闭"运行状态配色与图例(仅实时视图有意义)
   showStatus?: boolean
 }>(), {
+  totalDuration: null,
   previousDuration: null,
   showStatus: false
 })
@@ -142,9 +146,18 @@ const positiveItems = computed<RankingItem[]>(() =>
   props.items.filter(item => item.duration > 0)
 )
 
-// 今日总使用时长
-const totalDuration = computed<number>(() =>
+// 各应用时长总和(秒): 仅用于"空态判断/单个应用占比"等相对计算,
+// 不再作为卡片顶部"总时长"展示(多应用并发运行时会成倍虚高)
+const itemsTotalDuration = computed<number>(() =>
   positiveItems.value.reduce((sum, item) => sum + item.duration, 0)
+)
+
+// 卡片顶部展示的总时长: 优先使用客户端程序运行时长(统计数据totalDuration),
+// 旧数据缺失或为0时回退为应用时长总和, 避免历史页面显示异常
+const displayTotalDuration = computed<number>(() =>
+  props.totalDuration != null && props.totalDuration > 0
+    ? props.totalDuration
+    : itemsTotalDuration.value
 )
 
 // 最常使用(应用时长最大者)
@@ -216,7 +229,7 @@ const trendInfo = computed<{ type: 'less' | 'more' | 'same'; text: string } | nu
   if (props.previousDuration === null || props.previousDuration === undefined) {
     return null
   }
-  const diff = totalDuration.value - props.previousDuration
+  const diff = displayTotalDuration.value - props.previousDuration
   if (diff > 0) {
     return { type: 'more', text: `比昨天多 ${formatDurationText(diff)}` }
   }
@@ -226,12 +239,12 @@ const trendInfo = computed<{ type: 'less' | 'more' | 'same'; text: string } | nu
   return { type: 'same', text: '与昨天持平' }
 })
 
-// 单个应用占总时长的百分比(如 26.9%)
+// 单个应用占全部应用时长的百分比(如 26.9%)
 const percentOf = (item: RankingItem): string => {
-  if (totalDuration.value <= 0) {
+  if (itemsTotalDuration.value <= 0) {
     return '0%'
   }
-  const fixed = ((item.duration / totalDuration.value) * 100).toFixed(1)
+  const fixed = ((item.duration / itemsTotalDuration.value) * 100).toFixed(1)
   return fixed.replace(/\.0$/, '') + '%'
 }
 

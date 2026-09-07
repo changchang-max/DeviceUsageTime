@@ -23,6 +23,9 @@ export interface Statistics {
   keyboardCount: number
   mouseClickCount: number
   mouseDistance: number
+  // 客户端程序今日运行总时长(秒) ≈ 设备总使用时长/被监控时长。
+  // 由客户端每秒自行累计并随统计数据上传; 旧数据/旧客户端可能缺失该字段
+  totalDuration?: number
 }
 
 // 实时数据类型

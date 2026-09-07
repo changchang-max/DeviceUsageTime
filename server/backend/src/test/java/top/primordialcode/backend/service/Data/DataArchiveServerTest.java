@@ -58,6 +58,8 @@ class DataArchiveServerTest {
         statistics.setKeyboardCount(15000L);
         statistics.setMouseClickCount(8000L);
         statistics.setMouseDistance(150.25);
+        // 客户端程序当日运行时长(秒)，随统计数据一起归档
+        statistics.setTotalDuration(28800L);
 
         chromeApp = new ApplicationDTO();
         chromeApp.setName("Chrome");
@@ -88,7 +90,7 @@ class DataArchiveServerTest {
                 List.of(chromeApp), statistics);
 
         verify(historyDataMapper).upsertDailyStatistics(
-                eq(email), eq(date), eq(15000L), eq(8000L), eq(new BigDecimal("150.25")));
+                eq(email), eq(date), eq(15000L), eq(8000L), eq(new BigDecimal("150.25")), eq(28800L));
 
         ArgumentCaptor<AppUsageRecordEntity> recordCaptor =
                 ArgumentCaptor.forClass(AppUsageRecordEntity.class);
@@ -192,7 +194,7 @@ class DataArchiveServerTest {
 
         dataArchiveServer.archive(email, timestamp, List.of(chromeApp), null);
 
-        verify(historyDataMapper, never()).upsertDailyStatistics(anyString(), any(), any(), any(), any());
+        verify(historyDataMapper, never()).upsertDailyStatistics(anyString(), any(), any(), any(), any(), any());
         verify(historyDataMapper).insertAppRecord(any(AppUsageRecordEntity.class));
         verify(historyDataMapper).insertIgnoreDateIndex(email, date);
     }
@@ -204,11 +206,24 @@ class DataArchiveServerTest {
 
         dataArchiveServer.archive(email, timestamp, Collections.emptyList(), statistics);
 
-        verify(historyDataMapper).upsertDailyStatistics(anyString(), any(), any(), any(), any());
+        verify(historyDataMapper).upsertDailyStatistics(anyString(), any(), any(), any(), any(), any());
         verify(historyDataMapper, never()).selectAppRecord(anyString(), any(), any());
         verify(historyDataMapper).insertIgnoreDateIndex(email, date);
         // 没有前台应用，无需更新前台跟踪
         verify(historyDataMapper, never()).updateLastActiveApp(anyString(), any(), any());
+    }
+
+    @Test
+    @DisplayName("统计数据缺失totalDuration时原样传null(由SQL保留已有值/新行补0)")
+    void testArchiveStatisticsWithoutTotalDuration() {
+        when(historyDataMapper.selectDateIndex(email, date)).thenReturn(null);
+        statistics.setTotalDuration(null);
+
+        dataArchiveServer.archive(email, timestamp, Collections.emptyList(), statistics);
+
+        verify(historyDataMapper).upsertDailyStatistics(
+                eq(email), eq(date), eq(15000L), eq(8000L), eq(new BigDecimal("150.25")), isNull());
+        verify(historyDataMapper).insertIgnoreDateIndex(email, date);
     }
 
     @Test
@@ -228,7 +243,7 @@ class DataArchiveServerTest {
     void testArchiveNullTimestamp() {
         dataArchiveServer.archive(email, null, List.of(chromeApp), statistics);
 
-        verify(historyDataMapper, never()).upsertDailyStatistics(anyString(), any(), any(), any(), any());
+        verify(historyDataMapper, never()).upsertDailyStatistics(anyString(), any(), any(), any(), any(), any());
         verify(historyDataMapper, never()).insertAppRecord(any());
         verify(historyDataMapper, never()).insertIgnoreDateIndex(anyString(), any());
     }

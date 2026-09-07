@@ -58,6 +58,8 @@ class DataQueryServerTest {
         entity.setKeyboard_count(15000L);
         entity.setMouse_click_count(8000L);
         entity.setMouse_distance(new BigDecimal("150.25"));
+        // 客户端程序当日运行时长(秒)
+        entity.setTotal_duration(28800L);
         return entity;
     }
 
@@ -120,6 +122,7 @@ class DataQueryServerTest {
         assertEquals(15000L, statistics.getKeyboardCount());
         assertEquals(8000L, statistics.getMouseClickCount());
         assertEquals(150.25, statistics.getMouseDistance());
+        assertEquals(28800L, statistics.getTotalDuration());
     }
 
     @Test
@@ -171,6 +174,7 @@ class DataQueryServerTest {
         assertEquals(1, vo.getApplications().size());
         assertEquals(0L, vo.getStatistics().getKeyboardCount());
         assertEquals(0.0, vo.getStatistics().getMouseDistance());
+        assertEquals(0L, vo.getStatistics().getTotalDuration());
     }
 
     @Test

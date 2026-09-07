@@ -6,15 +6,18 @@
 
 <mapper namespace="top.primordialcode.backend.mapper.HistoryDataMapper">
 
-    <!-- 每日统计 upsert：存在则覆盖为最新累计值(ON DUPLICATE KEY UPDATE) -->
+    <!-- 每日统计 upsert：存在则覆盖为最新累计值(ON DUPLICATE KEY UPDATE)
+         注意：total_duration(客户端程序运行时长)在旧客户端未上传(null)时，
+         插入新行补0、更新已有行保留原值(不参与本次覆盖)，避免误清零当日运行时长 -->
     <insert id="upsertDailyStatistics">
-        insert into daily_statistics(user_email, stat_date, keyboard_count, mouse_click_count, mouse_distance)
-        values (#{user_email}, #{stat_date}, #{keyboard_count}, #{mouse_click_count}, #{mouse_distance})
+        insert into daily_statistics(user_email, stat_date, keyboard_count, mouse_click_count, mouse_distance, total_duration)
+        values (#{user_email}, #{stat_date}, #{keyboard_count}, #{mouse_click_count}, #{mouse_distance}, coalesce(#{total_duration}, 0))
         as new
         on duplicate key update
         keyboard_count = new.keyboard_count,
         mouse_click_count = new.mouse_click_count,
-        mouse_distance = new.mouse_distance
+        mouse_distance = new.mouse_distance,
+        total_duration = case when #{total_duration} is null then total_duration else new.total_duration end
     </insert>
 
     <select id="selectDailyStatistics"

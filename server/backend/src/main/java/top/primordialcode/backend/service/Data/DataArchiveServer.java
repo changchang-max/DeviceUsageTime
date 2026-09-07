@@ -60,9 +60,12 @@ public class DataArchiveServer {
             BigDecimal mouseDistance = statistics.getMouseDistance() != null
                     ? BigDecimal.valueOf(statistics.getMouseDistance())
                     : BigDecimal.ZERO;
+            // 客户端程序今日运行时长(秒)。旧客户端可能不携带该字段(null)，
+            // 由SQL层在插入新行时补0、在更新已有行时保留原值，避免把当日运行时长误清零
+            Long totalDuration = statistics.getTotalDuration();
 
             historyDataMapper.upsertDailyStatistics(
-                    user_email, date, keyboardCount, mouseClickCount, mouseDistance);
+                    user_email, date, keyboardCount, mouseClickCount, mouseDistance, totalDuration);
         }
 
         // 2. 读取日期索引，获取当日最近一次前台应用(用于统计使用次数)

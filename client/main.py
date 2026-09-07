@@ -80,6 +80,12 @@ SCROLL_PX_PER_DELTA: float = 3.0     # 每个最小滚动单位(1格)等效像�
 # 保护输入计数器的锁（pynput 回调线程 vs 上传线程 vs 跨天重置）
 input_lock = threading.Lock()
 
+# ==================== 客户端程序运行时长计数器 ====================
+# 客户端程序今日运行累计时长(秒): 由 window_monitor 每运行一秒 +1(与是否检测到应用无关)。
+# 用于前端"今日应用使用时长"卡片的总时长(≈设备总使用时长/被监控时长)，
+# 而非把所有应用时长相加(多应用并发运行时相加会成倍虚高)。跨天随应用字典一起清零。
+run_duration: int = 0
+
 
 # 更新上传状态(供上传线程调用)
 def set_upload_stage(stage: str, text: str, error: str = ""):
@@ -229,6 +235,7 @@ def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict,the_old_
     global config_File  #配置文件类
     global old_date_status  # 是否处于查看历史信息状态true/flase
     global old_date_refrush_flag    # 用来标记主窗口是否已经刷新过
+    global run_duration  # 客户端程序今日运行时长(秒)
 
     while not stop_event.is_set():
         # 判断是否为新的日期
@@ -239,6 +246,7 @@ def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict,the_old_
                 all_applications_dict.clear()#清空字典
                 tableWidget.setRowCount(0)#清空表单
                 current_date = new_date
+                run_duration = 0  # 新的一天客户端运行时长重新从0累计
             # 跨天时同步重置输入统计计数器
             global keyboard_count, mouse_click_count, mouse_distance_px, _last_mouse_pos
             with input_lock:
@@ -269,6 +277,9 @@ def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict,the_old_
                 if title not in all_applications_dict:
                     all_applications_dict[title] = proc_info.copy()
                     all_applications_dict[title]["use_time"] = 1
+
+            # 客户端程序自身今日运行时长 +1(程序每运行一秒计1秒, 与是否有应用在运行无关)
+            run_duration += 1
         
         # 每次循环都对字典进行排序(应该用clear与update把操作同步给原字典，而不只是局部变量)
         def sort_dict(application_dict:dict):
@@ -384,6 +395,8 @@ def save_data(data:dict):
             "mouseClickCount": mouse_click_count,
             "mouseDistance": round(mouse_distance_px * PIXEL_TO_METER, 2),
         }
+    # 附加客户端程序今日运行时长(秒)，重启后可从数据文件恢复累计值
+    simple_data["_statistics"]["totalDuration"] = run_duration
 
     # 覆盖写入
     file_name = pathlib.Path(f"./history_data/data_{current_date}.json")
@@ -422,6 +435,7 @@ def data_upload_thread(all_applications_dict: dict):
                 with thread_lock:
                     snapshot = {name: dict(proc_info) for name, proc_info in all_applications_dict.items()}
                     running_apps = set(current_running_apps)
+                    running_seconds = run_duration  # 客户端程序今日运行时长(秒)
             except RuntimeError:
                 # 恰好赶上window_monitor在锁外排序(clear+update)改写字典，本秒跳过，下一秒重试
                 time.sleep(1)
@@ -435,7 +449,7 @@ def data_upload_thread(all_applications_dict: dict):
                 md_meters = round(mouse_distance_px * PIXEL_TO_METER, 2)
             upload_data = network.build_upload_payload(
                 snapshot, running_apps, foreground_name, foreground_title, user_email,
-                kb_count, mc_count, md_meters)
+                kb_count, mc_count, md_meters, running_seconds)
             api_client.upload(upload_data)
             set_upload_stage("ok", f"已连接，上次上传 {mytools.hour()}", "")
         except network.ApiException as e:
@@ -1085,7 +1099,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
     # 初始化数据，若存在当天数据则读取，而不是从空开始
     def init_data(self):
-        global keyboard_count, mouse_click_count, mouse_distance_px
+        global keyboard_count, mouse_click_count, mouse_distance_px, run_duration
         date_str = time.strftime("%Y-%m-%d", time.localtime()) # 获取当前日期字符串
         file_name = f"./history_data/data_{date_str}.json"
         p = pathlib.Path(file_name)
@@ -1100,6 +1114,8 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                     mouse_click_count = int(stats.get("mouseClickCount", 0))
                     # mouseDistance 存储的是米，换算回像素存入 mouse_distance_px
                     mouse_distance_px = float(stats.get("mouseDistance", 0.0)) / PIXEL_TO_METER
+                # 还原客户端程序今日运行时长(秒)，兼容旧格式文件缺失该键的情况
+                run_duration = int(stats.get("totalDuration", 0))
                 # 转换为程序内部使用的复杂格式
                 self.all_applications_dict = {}
                 for title, use_time in simple_data.items():

@@ -366,7 +366,8 @@
   "statistics": {
     "keyboardCount": 1250,            // 键盘敲击累计次数
     "mouseClickCount": 856,           // 鼠标点击累计次数
-    "mouseDistance": 23.01            // 鼠标移动累计距离(米)
+    "mouseDistance": 23.01,           // 鼠标移动累计距离(米)
+    "totalDuration": 28800            // 客户端程序今日运行时长(秒) ≈ 设备总使用时长
   }
 }
 ```
@@ -443,7 +444,8 @@
     "statistics": {
       "keyboardCount": 1250,
       "mouseClickCount": 856,
-      "mouseDistance": 23.01
+      "mouseDistance": 23.01,
+      "totalDuration": 28800          // 客户端程序今日运行时长(秒) ≈ 设备总使用时长
     }
   }
 }
@@ -500,7 +502,8 @@
     "statistics": {
       "keyboardCount": 15000,
       "mouseClickCount": 8000,
-      "mouseDistance": 150.25
+      "mouseDistance": 150.25,
+      "totalDuration": 28800           // 客户端程序当日运行时长(秒) ≈ 设备总使用时长
     }
   }
 }
@@ -629,7 +632,8 @@
     "statistics": {
       "keyboardCount": 1250,
       "mouseClickCount": 856,
-      "mouseDistance": 23.01
+      "mouseDistance": 23.01,
+      "totalDuration": 28800          // 客户端程序今日运行时长(秒) ≈ 设备总使用时长
     }
   }
 }
@@ -748,6 +752,7 @@
 | keyboardCount | Integer | 是 | 键盘敲击累计次数 |
 | mouseClickCount | Integer | 是 | 鼠标点击累计次数 |
 | mouseDistance | Float | 是 | 鼠标移动累计距离(米),保留两位小数 |
+| totalDuration | Integer | 否 | 客户端程序当日运行总时长(秒) ≈ 设备总使用时长；旧客户端/旧数据可能缺失 |
 
 ### 9.3 用户数据字段
 
@@ -849,7 +854,8 @@ curl -X POST http://localhost:8080/api/data/upload \
     "statistics": {
       "keyboardCount": 1250,
       "mouseClickCount": 856,
-      "mouseDistance": 23.01
+      "mouseDistance": 23.01,
+      "totalDuration": 28800          // 客户端程序今日运行时长(秒) ≈ 设备总使用时长
     }
   }'
 ```

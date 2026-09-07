@@ -78,6 +78,7 @@
         <AppDurationRanking
           :title="rankingTitle"
           :items="rankingItems"
+          :total-duration="statistics.totalDuration ?? null"
           :previous-duration="isRealtime ? yesterdayTotal : null"
           :show-status="isRealtime"
         />
@@ -185,7 +186,8 @@ const rankingTitle = computed(() => {
   return `${Number(parts[1])}月${Number(parts[2])}日 应用使用时长`
 })
 
-// 昨日总使用时长(秒), 用于"今日 vs 昨天"对比; 无昨日数据时为 null(不显示对比)
+// 昨日总时长(秒), 用于"今日 vs 昨天"对比; 无昨日数据时为 null(不显示对比)。
+// 与今日总时长同口径: 取昨日客户端程序运行时长(历史统计totalDuration), 而非应用时长总和
 const yesterdayTotal = ref<number | null>(null)
 
 const loadYesterdayTotal = async () => {
@@ -201,16 +203,14 @@ const loadYesterdayTotal = async () => {
 
   try {
     const res = await getHistoryDataApi(yesterdayKey, secretKey.value || undefined)
-    const apps = res.data?.applications
-    if (!apps || apps.length === 0) {
-      // 昨日无任何应用记录,视为无可对比数据
+    const stats = res.data?.statistics
+    const prevTotal = stats?.totalDuration
+    // 昨日无统计或运行时长为0/缺失(旧客户端或当日未记录)时, 视为无可对比数据
+    if (!prevTotal || prevTotal <= 0) {
       yesterdayTotal.value = null
       return
     }
-    yesterdayTotal.value = apps.reduce(
-      (sum, app) => sum + (app.totalDuration || 0),
-      0
-    )
+    yesterdayTotal.value = prevTotal
   } catch (error) {
     // 昨日无数据或请求失败均视为无法对比,不打断页面主流程
     yesterdayTotal.value = null

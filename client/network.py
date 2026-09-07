@@ -140,7 +140,8 @@ def build_upload_payload(app_snapshot: dict, running_apps: set,
                          user_email: str = "",
                          keyboard_count: int = 0,
                          mouse_click_count: int = 0,
-                         mouse_distance: float = 0.0) -> dict:
+                         mouse_distance: float = 0.0,
+                         run_duration: int = 0) -> dict:
     """把客户端内部监控数据组装成 前后端API文档 5.1 的增量上传JSON结构。
 
     :param app_snapshot: 内部字典快照，形如 {进程名: {"pid":..,"title":..,"use_time":..}}
@@ -151,6 +152,8 @@ def build_upload_payload(app_snapshot: dict, running_apps: set,
     :param keyboard_count: 键盘敲击累计次数
     :param mouse_click_count: 鼠标点击累计次数（左/右/中键，不含滚轮滚动）
     :param mouse_distance: 鼠标移动累计距离（米），保留两位小数
+    :param run_duration: 客户端程序今日运行累计时长(秒)，用于前端"今日总使用时长"
+        (≈设备总使用时长)，而非把所有应用时长相加(多应用并发运行会成倍虚高)
     """
     applications = []
     for name in running_apps:
@@ -179,5 +182,6 @@ def build_upload_payload(app_snapshot: dict, running_apps: set,
             "keyboardCount": keyboard_count,
             "mouseClickCount": mouse_click_count,
             "mouseDistance": mouse_distance,
+            "totalDuration": run_duration,
         },
     }

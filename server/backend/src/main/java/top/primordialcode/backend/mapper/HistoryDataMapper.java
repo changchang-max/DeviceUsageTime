@@ -25,7 +25,8 @@ public interface HistoryDataMapper {
                               @Param("stat_date") LocalDate stat_date,
                               @Param("keyboard_count") Long keyboard_count,
                               @Param("mouse_click_count") Long mouse_click_count,
-                              @Param("mouse_distance") BigDecimal mouse_distance);
+                              @Param("mouse_distance") BigDecimal mouse_distance,
+                              @Param("total_duration") Long total_duration);
 
     /**
      * 查询某用户某天的每日统计

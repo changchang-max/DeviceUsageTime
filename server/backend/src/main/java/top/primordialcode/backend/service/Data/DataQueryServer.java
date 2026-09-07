@@ -221,6 +221,10 @@ public class DataQueryServer {
         statistics.setMouseDistance(
                 entity != null && entity.getMouse_distance() != null
                         ? entity.getMouse_distance().doubleValue() : 0.0);
+        // 客户端程序当日运行时长(秒)(缺省补0)
+        statistics.setTotalDuration(
+                entity != null && entity.getTotal_duration() != null
+                        ? entity.getTotal_duration() : 0L);
         return statistics;
     }
 
