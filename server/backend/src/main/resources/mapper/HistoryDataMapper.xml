@@ -8,7 +8,9 @@
 
     <!-- 每日统计 upsert：存在则覆盖为最新累计值(ON DUPLICATE KEY UPDATE)
          注意：total_duration(客户端程序运行时长)在旧客户端未上传(null)时，
-         插入新行补0、更新已有行保留原值(不参与本次覆盖)，避免误清零当日运行时长 -->
+         插入新行补0、更新已有行保留原值(不参与本次覆盖)，避免误清零当日运行时长。
+         行别名 AS new 与插入列同名时，update子句中未限定的列引用会产生歧义(ERROR 1052)，
+         因此保留已有行值必须用表名限定为 daily_statistics.total_duration -->
     <insert id="upsertDailyStatistics">
         insert into daily_statistics(user_email, stat_date, keyboard_count, mouse_click_count, mouse_distance, total_duration)
         values (#{user_email}, #{stat_date}, #{keyboard_count}, #{mouse_click_count}, #{mouse_distance}, coalesce(#{total_duration}, 0))
@@ -17,7 +19,7 @@
         keyboard_count = new.keyboard_count,
         mouse_click_count = new.mouse_click_count,
         mouse_distance = new.mouse_distance,
-        total_duration = case when #{total_duration} is null then total_duration else new.total_duration end
+        total_duration = case when #{total_duration} is null then daily_statistics.total_duration else new.total_duration end
     </insert>
 
     <select id="selectDailyStatistics"
