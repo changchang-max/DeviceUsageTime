@@ -485,9 +485,11 @@ def data_upload_thread(all_applications_dict: dict):
                 kb_count = keyboard_count
                 mc_count = mouse_click_count
                 md_meters = round(mouse_distance_px * PIXEL_TO_METER, 2)
+            # 读取注备名映射字典，存在备注名时以上传备注名替换真实进程名
+            alias_map = alias_file._alias_dict.copy() if alias_file else {}
             upload_data = network.build_upload_payload(
                 snapshot, running_apps, foreground_name, foreground_title, user_email,
-                kb_count, mc_count, md_meters, running_seconds)
+                kb_count, mc_count, md_meters, running_seconds, alias_map)
             api_client.upload(upload_data)
             set_upload_stage("ok", f"已连接，上次上传 {mytools.hour()}", "")
         except network.ApiException as e:

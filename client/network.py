@@ -141,7 +141,8 @@ def build_upload_payload(app_snapshot: dict, running_apps: set,
                          keyboard_count: int = 0,
                          mouse_click_count: int = 0,
                          mouse_distance: float = 0.0,
-                         run_duration: int = 0) -> dict:
+                         run_duration: int = 0,
+                         alias_map: dict = None) -> dict:
     """把客户端内部监控数据组装成 前后端API文档 5.1 的增量上传JSON结构。
 
     :param app_snapshot: 内部字典快照，形如 {进程名: {"pid":..,"title":..,"use_time":..}}
@@ -154,6 +155,7 @@ def build_upload_payload(app_snapshot: dict, running_apps: set,
     :param mouse_distance: 鼠标移动累计距离（米），保留两位小数
     :param run_duration: 客户端程序今日运行累计时长(秒)，用于前端"今日总使用时长"
         (≈设备总使用时长)，而非把所有应用时长相加(多应用并发运行会成倍虚高)
+    :param alias_map: 进程名→备注名 映射字典，存在备注名时替换真实进程名上传
     """
     applications = []
     for name in running_apps:
@@ -162,8 +164,12 @@ def build_upload_payload(app_snapshot: dict, running_apps: set,
             continue
         # 最顶端窗口所在进程名与当前应用一致时，视为前台活跃应用
         is_active = foreground_name is not None and name == foreground_name
+        # 如果存在备注名，则以备注名替换真实进程名
+        upload_name = trim_process_name(name)
+        if alias_map and name in alias_map:
+            upload_name = alias_map[name]
         app_item = {
-            "name": trim_process_name(name),
+            "name": upload_name,
             "duration": int(proc_info.get("use_time", 0)),
             "isActive": is_active,
             # 出现在上报列表即代表正在运行，isRunning默认为true
