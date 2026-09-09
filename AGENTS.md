@@ -229,6 +229,7 @@ WebSocket 连接：`ws://localhost:8080/ws/device?token=xxx`
 
 ### 0.2 Commit 整理规范
 遵循 Conventional Commits 规范,格式: `<type>(<scope>): <subject>`,直接输出在聊天窗。
+每一次修改文件都对我输出一次commit。
 
 ### 0.3 变量命名
 变量命名时尽量与entity数据库实体的变量名保持一致。如`UserAuthEntity.java`定义了`public String user_email`，则在定义相关变量时，不会命名冲突或产生歧义的情况下，也应命名为`user_email`，而非`email`，这样可以有效预防命名不统一导致后端无法接收前端请求和格式混乱的问题

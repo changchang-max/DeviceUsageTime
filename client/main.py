@@ -1247,19 +1247,20 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
         hint = QLabel(
             "以下进程已被屏蔽：不会显示在主界面表格中，也不会被上传到服务器。\n"
-            "勾选后点击“解除屏蔽”即可恢复。", page_3)
+            "单击选中进程名，点击“解除屏蔽”即可恢复。", page_3)
         hint.setWordWrap(True)
         hint.setStyleSheet("color:gray;")
         layout.addWidget(hint)
 
-        # 进程列表（带复选框）
+        # 进程列表（单击选中进程名，点击"解除屏蔽"即可恢复）
         self.blocked_list_widget = QTableWidget(page_3)
-        self.blocked_list_widget.setColumnCount(2)
-        self.blocked_list_widget.setHorizontalHeaderLabels(["", "进程名"])
-        self.blocked_list_widget.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self.blocked_list_widget.setColumnWidth(0, 40)
+        self.blocked_list_widget.setColumnCount(1)
+        self.blocked_list_widget.setHorizontalHeaderLabels(["进程名"])
+        self.blocked_list_widget.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.blocked_list_widget.verticalHeader().setVisible(False)
         self.blocked_list_widget.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.blocked_list_widget.setSelectionBehavior(QTableWidget.SelectRows)
+        self.blocked_list_widget.setSelectionMode(QTableWidget.SingleSelection)
         layout.addWidget(self.blocked_list_widget)
 
         # 按钮行：解除屏蔽
@@ -1289,34 +1290,30 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.blocked_list_widget.setRowCount(0)
         for i, proc_name in enumerate(blocked_list):
             self.blocked_list_widget.insertRow(i)
-            # 复选框——直接作为 cellWidget，不用容器包装，避免 findChild 检测不到
-            cb = QCheckBox()
-            cb.setStyleSheet("margin-left:10px;")
-            self.blocked_list_widget.setCellWidget(i, 0, cb)
-            # 进程名
+            # 进程名（点击选中行即可）
             display_name = alias_file.get_alias(proc_name)
             item = QTableWidgetItem(display_name)
             item.setData(Qt.UserRole, proc_name)
             item.setTextAlignment(Qt.AlignCenter)
-            self.blocked_list_widget.setItem(i, 1, item)
+            self.blocked_list_widget.setItem(i, 0, item)
 
     # 点击“解除屏蔽”
     def _on_unblock_clicked(self):
         """解除用户选中的进程的屏蔽状态"""
         global blocked_file, _row_index_cache
+        selected_rows = self.blocked_list_widget.selectionModel().selectedRows()
+        if not selected_rows:
+            return
         unchecked_count = 0
-        for row in range(self.blocked_list_widget.rowCount()):
-            cb = self.blocked_list_widget.cellWidget(row, 0)
-            if cb is None or not isinstance(cb, QCheckBox):
+        for index in selected_rows:
+            row = index.row()
+            item = self.blocked_list_widget.item(row, 0)
+            if item is None:
                 continue
-            if cb.isChecked():
-                item = self.blocked_list_widget.item(row, 1)
-                if item is None:
-                    continue
-                proc_name = item.data(Qt.UserRole)
-                if proc_name:
-                    blocked_file.unblock(proc_name)
-                    unchecked_count += 1
+            proc_name = item.data(Qt.UserRole)
+            if proc_name:
+                blocked_file.unblock(proc_name)
+                unchecked_count += 1
 
         if unchecked_count > 0:
             _row_index_cache.clear()
