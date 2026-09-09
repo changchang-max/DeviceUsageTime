@@ -1218,24 +1218,23 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
     def _init_blocked_process_page(self):
         """在设置窗口的 stackedWidget 中创建第三页，展示被屏蔽的进程列表并支持解除屏蔽"""
         global blocked_file
+        # 使用标志位防止重复初始化（多次打开设置窗口时只创建一次）
+        if hasattr(self, "_blocked_page_inited") and self._blocked_page_inited:
+            self._refresh_blocked_list()
+            return
 
         # 创建第三页 widget
         page_3 = QWidget()
         self.settings_ui.stackedWidget.addWidget(page_3)  # index = 2
 
-        # 修改左侧菜单：将第二项改名为“账号与上传”，新增第三项“进程屏蔽”
-        list_item = self.settings_ui.listWidget.item(1)
-        if list_item is not None:
-            list_item.setText("账号与上传")
-        # 检查是否已经添加过第三项（防止重复打开设置时重复添加）
-        if self.settings_ui.listWidget.count() <= 2:
-            item_3 = QListWidgetItem("进程屏蔽")
-            item_3.setTextAlignment(Qt.AlignCenter)
-            font = self.settings_ui.listWidget.font()
-            font.setBold(True)
-            font.setPointSize(12)
-            item_3.setFont(font)
-            self.settings_ui.listWidget.addItem(item_3)
+        # 新增第三项“进程屏蔽”（第二项已在 init_account_setting 中改名）
+        item_3 = QListWidgetItem("进程屏蔽")
+        item_3.setTextAlignment(Qt.AlignCenter)
+        font = self.settings_ui.listWidget.font()
+        font.setBold(True)
+        font.setPointSize(12)
+        item_3.setFont(font)
+        self.settings_ui.listWidget.addItem(item_3)
 
         # 布局页面
         layout = QVBoxLayout(page_3)
@@ -1278,6 +1277,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.unblock_btn.clicked.connect(self._on_unblock_clicked)
         self.refresh_blocked_btn.clicked.connect(self._refresh_blocked_list)
 
+        self._blocked_page_inited = True
         # 初次填充列表
         self._refresh_blocked_list()
 
@@ -1289,15 +1289,10 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.blocked_list_widget.setRowCount(0)
         for i, proc_name in enumerate(blocked_list):
             self.blocked_list_widget.insertRow(i)
-            # 复选框
+            # 复选框——直接作为 cellWidget，不用容器包装，避免 findChild 检测不到
             cb = QCheckBox()
             cb.setStyleSheet("margin-left:10px;")
-            cb_widget = QWidget()
-            cb_layout = QHBoxLayout(cb_widget)
-            cb_layout.addWidget(cb)
-            cb_layout.setAlignment(Qt.AlignCenter)
-            cb_layout.setContentsMargins(0, 0, 0, 0)
-            self.blocked_list_widget.setCellWidget(i, 0, cb_widget)
+            self.blocked_list_widget.setCellWidget(i, 0, cb)
             # 进程名
             display_name = alias_file.get_alias(proc_name)
             item = QTableWidgetItem(display_name)
@@ -1311,11 +1306,8 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         global blocked_file, _row_index_cache
         unchecked_count = 0
         for row in range(self.blocked_list_widget.rowCount()):
-            cb_widget = self.blocked_list_widget.cellWidget(row, 0)
-            if cb_widget is None:
-                continue
-            cb = cb_widget.findChild(QCheckBox)
-            if cb is None:
+            cb = self.blocked_list_widget.cellWidget(row, 0)
+            if cb is None or not isinstance(cb, QCheckBox):
                 continue
             if cb.isChecked():
                 item = self.blocked_list_widget.item(row, 1)
