@@ -1486,6 +1486,8 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
     
     # 动作：打开“设置”窗口
     def open_settings_window(self):
+        # 重置屏蔽页标志位（每次重新创建窗口，旧的 page_3 已被销毁）
+        self._blocked_page_inited = False
         # 点击设置时再创建Settings窗口实例
         self.settings_window = QMainWindow()
         self.settings_ui = Ui_Settings()
