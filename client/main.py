@@ -224,15 +224,27 @@ def get_user_app_pids() -> dict:
             user_procs.append(proc)
             pid_map[proc.pid] = proc
 
-    # 过滤子进程：如果父进程不在用户进程集合中 → 保留
+    # 过滤子进程：仅过滤与父进程同名的子进程（如 Electron renderer），
+    # 避免误杀被其他应用启动的进程（如 uTools 启动的 DSH Desktop）
     for proc in user_procs:
         try:
-            if proc.ppid() not in pid_map:
+            ppid = proc.ppid()
+            if ppid not in pid_map:
+                # 父进程不在用户进程集合中 → 保留
                 result[proc.name()] = {
                     "pid": proc.pid,
                     "title": proc.name(),
                     "use_time": 0
                 }
+            else:
+                # 父进程也在用户进程中：仅当父进程同名时才跳过（视为子进程）
+                parent = pid_map[ppid]
+                if parent.name() != proc.name():
+                    result[proc.name()] = {
+                        "pid": proc.pid,
+                        "title": proc.name(),
+                        "use_time": 0
+                    }
         except (psutil.AccessDenied, psutil.NoSuchProcess):
             continue
 
