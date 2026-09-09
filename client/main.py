@@ -297,19 +297,22 @@ def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict,the_old_
 
         # 加上线程锁防止资源竞争
         with thread_lock:
+            # 过滤掉被屏蔽的进程（不被跟踪时间、不上传、不显示）
+            blocked_set = blocked_file.get_all_blocked()
+            current_procs_filtered = {k: v for k, v in current_procs.items() if k not in blocked_set}
+
             # 同步“当前正在运行的应用”集合，供上传线程过滤已关闭的应用
             current_running_apps.clear()
-            current_running_apps.update(current_procs.keys())
+            current_running_apps.update(current_procs_filtered.keys())
 
             # 更新all_applications_dict
             # 1. 对现有进程的use_time+1
             for title in list(all_applications_dict.keys()):
-                if title in current_procs:
+                if title in current_procs_filtered:
                     all_applications_dict[title]["use_time"] += 1
-                
-            
+
             # 2. 添加新进程
-            for title, proc_info in current_procs.items():
+            for title, proc_info in current_procs_filtered.items():
                 if title not in all_applications_dict:
                     all_applications_dict[title] = proc_info.copy()
                     all_applications_dict[title]["use_time"] = 1
@@ -358,7 +361,7 @@ _row_index_cache: dict = {}
 
 # (QTableWidget对象,标题列表)向表中添加行
 def add_row(tableWidget: QTableWidget, all_applications_dict: dict):
-    global alias_file, _row_index_cache, ui_freeze
+    global alias_file, _row_index_cache, ui_freeze, blocked_file
 
     # 若表格行数归零（切换数据源），则重建缓存
     if tableWidget.rowCount() == 0:
@@ -370,6 +373,9 @@ def add_row(tableWidget: QTableWidget, all_applications_dict: dict):
 
     for title, proc_info in all_applications_dict.items():
         proc_name = proc_info["title"]
+        # 跳过已被屏蔽的进程（不在表格中显示，也不会上传）
+        if blocked_file.is_blocked(proc_name):
+            continue
         # 优先用缓存查找行号，缓存未命中再回退到 is_exist 遍历
         tabel_row = _row_index_cache.get(proc_name)
         if tabel_row is None:
@@ -486,6 +492,10 @@ def data_upload_thread(all_applications_dict: dict):
                     snapshot = {name: dict(proc_info) for name, proc_info in all_applications_dict.items()}
                     running_apps = set(current_running_apps)
                     running_seconds = run_duration  # 客户端程序今日运行时长(秒)
+                # 过滤掉已被屏蔽的进程（不显示也不上传）
+                blocked_set = blocked_file.get_all_blocked()
+                snapshot = {k: v for k, v in snapshot.items() if k not in blocked_set}
+                running_apps = {a for a in running_apps if a not in blocked_set}
             except RuntimeError:
                 # 恰好赶上window_monitor在锁外排序(clear+update)改写字典，本秒跳过，下一秒重试
                 time.sleep(1)
@@ -656,6 +666,56 @@ class Init_AliasFile:
         return proc_name in self._alias_dict
 
 
+# 进程屏蔽文件相关类（初始化、读取、修改）
+class Init_BlockedFile:
+    """管理 ./config/blocked_processes.json，存储被屏蔽的进程名列表。
+    被屏蔽的进程不会显示在主界面表格中，也不会被上传到服务器。
+    格式：["process1.exe", "process2.exe", ...]
+    """
+    def __init__(self):
+        self.blocked_file_path = pathlib.Path("./config/blocked_processes.json")
+        self._lock = threading.Lock()
+        self._init_file()
+        self._blocked_set = self._load()
+
+    def _init_file(self):
+        """若文件不存在则创建，内容为空 JSON 数组"""
+        if not self.blocked_file_path.exists() or not self.blocked_file_path.is_file():
+            self.blocked_file_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.blocked_file_path, "w", encoding="utf-8") as f:
+                json.dump([], f, ensure_ascii=False, indent=4)
+
+    def _load(self) -> set:
+        try:
+            with open(self.blocked_file_path, "r", encoding="utf-8") as f:
+                return set(json.load(f))
+        except Exception:
+            return set()
+
+    def _save(self):
+        with self._lock:
+            with open(self.blocked_file_path, "w", encoding="utf-8") as f:
+                json.dump(sorted(self._blocked_set), f, ensure_ascii=False, indent=4)
+
+    def is_blocked(self, proc_name: str) -> bool:
+        with self._lock:
+            return proc_name in self._blocked_set
+
+    def block(self, proc_name: str):
+        with self._lock:
+            self._blocked_set.add(proc_name)
+        self._save()
+
+    def unblock(self, proc_name: str):
+        with self._lock:
+            self._blocked_set.discard(proc_name)
+        self._save()
+
+    def get_all_blocked(self) -> list:
+        with self._lock:
+            return sorted(self._blocked_set)
+
+
 # 配置文件相关类（初始化、读取、修改）
 class Init_ConfigFile:
     # （先尝试从配置文件中拿到数据，如果拿不到则写入配置文件）
@@ -754,10 +814,12 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         global current_date
         global config_File  # 创建配置文件类实例
         global alias_file   # 创建备注文件类实例
+        global blocked_file # 创建进程屏蔽文件类实例
         global old_date_status  # 表示用户是否正处于查看历史信息的状态 true正在查看历史/flase没有查看历史
         global old_date_refrush_flag    # 用来标记主窗口是否已经刷新过
         config_File = Init_ConfigFile()
         alias_file = Init_AliasFile()
+        blocked_file = Init_BlockedFile()
         # self.config_File = config_File
         # 存储当天时间
         current_date = time.strftime("%Y-%m-%d")
@@ -868,6 +930,9 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.tableWidget.setEditTriggers(QTableWidget.NoEditTriggers)
         # 双击单元格 → 弹出备注编辑框
         self.tableWidget.cellDoubleClicked.connect(self.on_cell_double_clicked)
+        # 右键单元格 → 弹出操作菜单（屏蔽进程等）
+        self.tableWidget.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tableWidget.customContextMenuRequested.connect(self.on_table_context_menu)
 
 
         # 为“设置”菜单添加点击动作
@@ -983,6 +1048,53 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         # 但需要防止 removeCellWidget 时二次触发
         editor.editingFinished.connect(commit_edit)
 
+    # 右键表格单元格时弹出上下文菜单
+    def on_table_context_menu(self, pos):
+        """右键点击表格时弹出操作菜单，包含屏蔽进程等选项"""
+        global blocked_file, _row_index_cache
+        row = self.tableWidget.rowAt(pos.y())
+        if row < 0:
+            return
+        item = self.tableWidget.item(row, 1)
+        if item is None:
+            return
+        # 取出真实进程名
+        proc_name = item.data(Qt.UserRole)
+        if proc_name is None:
+            proc_name = item.text()
+
+        # 显示名称（有备注则显示备注名）
+        display_name = alias_file.get_alias(proc_name)
+
+        menu = QMenu(self.tableWidget)
+
+        # 屏蔽此进程
+        if not blocked_file.is_blocked(proc_name):
+            block_action = menu.addAction(f"⛔ 屏蔽此进程：{display_name}")
+        else:
+            block_action = menu.addAction(f"✅ 已屏蔽：{display_name}")
+            block_action.setEnabled(False)
+
+        action = menu.exec_(self.tableWidget.viewport().mapToGlobal(pos))
+        if action == block_action and not blocked_file.is_blocked(proc_name):
+            self.block_process(proc_name)
+
+    # 屏蔽指定进程
+    def block_process(self, proc_name: str):
+        """将指定进程加入屏蔽列表，立即从表格移除并停止上传"""
+        global blocked_file, _row_index_cache
+        blocked_file.block(proc_name)
+        # 清除行缓存，强制下次刷新重建表格
+        _row_index_cache.clear()
+        # 刷新表格（blocked 进程会被 add_row 自动跳过）
+        self.refresh_table()
+        # 托盘气泡提示
+        self.tray_icon.showMessage(
+            "屏幕视奸器",
+            f"已屏蔽进程：{proc_name}\n可在设置中解除屏蔽",
+            QSystemTrayIcon.Information, 3000
+        )
+
     # 初始化“设置”窗口
     def init_Settings_Window(self):
         global config_File
@@ -1001,6 +1113,9 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
         # 第二页：账号与数据上传设置
         self.init_account_setting()
+
+        # 第三页：进程屏蔽管理（需先添加 page_3 到 stackedWidget）
+        self._init_blocked_process_page()
 
     # 在设置窗口第二页搭建“账号与上传”表单(账号登录/退出、服务器地址、上传状态)
     def init_account_setting(self):
@@ -1098,6 +1213,130 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                 self.account_status_label.setText(f"登录已失效，请重新登录\n({error_text})")
             else:
                 self.account_status_label.setText("未登录（登录后每秒自动上传数据）")
+
+    # 在设置窗口添加第三页：进程屏蔽管理
+    def _init_blocked_process_page(self):
+        """在设置窗口的 stackedWidget 中创建第三页，展示被屏蔽的进程列表并支持解除屏蔽"""
+        global blocked_file
+
+        # 创建第三页 widget
+        page_3 = QWidget()
+        self.settings_ui.stackedWidget.addWidget(page_3)  # index = 2
+
+        # 修改左侧菜单：将第二项改名为“账号与上传”，新增第三项“进程屏蔽”
+        list_item = self.settings_ui.listWidget.item(1)
+        if list_item is not None:
+            list_item.setText("账号与上传")
+        # 检查是否已经添加过第三项（防止重复打开设置时重复添加）
+        if self.settings_ui.listWidget.count() <= 2:
+            item_3 = QListWidgetItem("进程屏蔽")
+            item_3.setTextAlignment(Qt.AlignCenter)
+            font = self.settings_ui.listWidget.font()
+            font.setBold(True)
+            font.setPointSize(12)
+            item_3.setFont(font)
+            self.settings_ui.listWidget.addItem(item_3)
+
+        # 布局页面
+        layout = QVBoxLayout(page_3)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
+
+        title = QLabel("被屏蔽的进程", page_3)
+        title.setStyleSheet("font-size:16px;font-weight:bold;")
+        layout.addWidget(title)
+
+        hint = QLabel(
+            "以下进程已被屏蔽：不会显示在主界面表格中，也不会被上传到服务器。\n"
+            "勾选后点击“解除屏蔽”即可恢复。", page_3)
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color:gray;")
+        layout.addWidget(hint)
+
+        # 进程列表（带复选框）
+        self.blocked_list_widget = QTableWidget(page_3)
+        self.blocked_list_widget.setColumnCount(2)
+        self.blocked_list_widget.setHorizontalHeaderLabels(["", "进程名"])
+        self.blocked_list_widget.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.blocked_list_widget.setColumnWidth(0, 40)
+        self.blocked_list_widget.verticalHeader().setVisible(False)
+        self.blocked_list_widget.setEditTriggers(QTableWidget.NoEditTriggers)
+        layout.addWidget(self.blocked_list_widget)
+
+        # 按钮行：解除屏蔽
+        btn_row = QHBoxLayout()
+        self.unblock_btn = QPushButton("解除屏蔽", page_3)
+        self.refresh_blocked_btn = QPushButton("刷新列表", page_3)
+        btn_row.addWidget(self.unblock_btn)
+        btn_row.addWidget(self.refresh_blocked_btn)
+        btn_row.addStretch()
+        layout.addLayout(btn_row)
+
+        layout.addStretch()
+
+        # 绑定事件
+        self.unblock_btn.clicked.connect(self._on_unblock_clicked)
+        self.refresh_blocked_btn.clicked.connect(self._refresh_blocked_list)
+
+        # 初次填充列表
+        self._refresh_blocked_list()
+
+    # 刷新被屏蔽进程列表
+    def _refresh_blocked_list(self):
+        """重新读取 blocked 列表并刷新表格"""
+        global blocked_file
+        blocked_list = blocked_file.get_all_blocked()
+        self.blocked_list_widget.setRowCount(0)
+        for i, proc_name in enumerate(blocked_list):
+            self.blocked_list_widget.insertRow(i)
+            # 复选框
+            cb = QCheckBox()
+            cb.setStyleSheet("margin-left:10px;")
+            cb_widget = QWidget()
+            cb_layout = QHBoxLayout(cb_widget)
+            cb_layout.addWidget(cb)
+            cb_layout.setAlignment(Qt.AlignCenter)
+            cb_layout.setContentsMargins(0, 0, 0, 0)
+            self.blocked_list_widget.setCellWidget(i, 0, cb_widget)
+            # 进程名
+            display_name = alias_file.get_alias(proc_name)
+            item = QTableWidgetItem(display_name)
+            item.setData(Qt.UserRole, proc_name)
+            item.setTextAlignment(Qt.AlignCenter)
+            self.blocked_list_widget.setItem(i, 1, item)
+
+    # 点击“解除屏蔽”
+    def _on_unblock_clicked(self):
+        """解除用户选中的进程的屏蔽状态"""
+        global blocked_file, _row_index_cache
+        unchecked_count = 0
+        for row in range(self.blocked_list_widget.rowCount()):
+            cb_widget = self.blocked_list_widget.cellWidget(row, 0)
+            if cb_widget is None:
+                continue
+            cb = cb_widget.findChild(QCheckBox)
+            if cb is None:
+                continue
+            if cb.isChecked():
+                item = self.blocked_list_widget.item(row, 1)
+                if item is None:
+                    continue
+                proc_name = item.data(Qt.UserRole)
+                if proc_name:
+                    blocked_file.unblock(proc_name)
+                    unchecked_count += 1
+
+        if unchecked_count > 0:
+            _row_index_cache.clear()
+            self._refresh_blocked_list()
+            self.tray_icon.showMessage(
+                "屏幕视奸器",
+                f"已解除 {unchecked_count} 个进程的屏蔽",
+                QSystemTrayIcon.Information, 3000
+            )
+        else:
+            # 没有选中任何进程，提示用户
+            pass
 
     # 点击“登录并开始上传”
     def on_login_clicked(self):
