@@ -1082,11 +1082,15 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
     # 屏蔽指定进程
     def block_process(self, proc_name: str):
         """将指定进程加入屏蔽列表，立即从表格移除并停止上传"""
-        global blocked_file, _row_index_cache
+        global blocked_file, _row_index_cache, old_date_refrush_flag
         blocked_file.block(proc_name)
-        # 清除行缓存，强制下次刷新重建表格
+        # 从字典中移除以停止计时，锁保护避免与 window_monitor 线程竞争
+        with thread_lock:
+            self.all_applications_dict.pop(proc_name, None)
+        # 清空表格 + 缓存，强制完整重建
+        self.tableWidget.setRowCount(0)
         _row_index_cache.clear()
-        # 刷新表格（blocked 进程会被 add_row 自动跳过）
+        old_date_refrush_flag = False
         self.refresh_table()
         # 托盘气泡提示
         self.tray_icon.showMessage(
