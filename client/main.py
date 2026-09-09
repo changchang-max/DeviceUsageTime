@@ -281,17 +281,18 @@ def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict,the_old_
             # 客户端程序自身今日运行时长 +1(程序每运行一秒计1秒, 与是否有应用在运行无关)
             run_duration += 1
         
-        # 每次循环都对字典进行排序(应该用clear与update把操作同步给原字典，而不只是局部变量)
-        def sort_dict(application_dict:dict):
-            new_applications_dict = Sort(application_dict).sort(config_File.get_sort_type())
-            application_dict.clear()
-            application_dict.update(new_applications_dict)
-
         # old_date_status = False是正常状态，即历史模式未开启状态
-        if old_date_status is False:
-            sort_dict(all_applications_dict)
-        else:
-            sort_dict(the_old_date_application_dict)
+        # 排序操作放在 thread_lock 内，防止 sort_dict 中的 clear()+update()
+        # 与 auto_save_thread 的 save_data() 发生竞态，导致当天数据被清空
+        with thread_lock:
+            if old_date_status is False:
+                new_dict = Sort(all_applications_dict).sort(config_File.get_sort_type())
+                all_applications_dict.clear()
+                all_applications_dict.update(new_dict)
+            else:
+                new_dict = Sort(the_old_date_application_dict).sort(config_File.get_sort_type())
+                the_old_date_application_dict.clear()
+                the_old_date_application_dict.update(new_dict)
         
 
         try:
@@ -399,11 +400,18 @@ def save_data(data:dict):
     simple_data["_statistics"]["totalDuration"] = run_duration
 
     # 覆盖写入
-    file_name = pathlib.Path(f"./history_data/data_{current_date}.json")
-
-    # 加上线程锁防止竞争
+    # 在锁内读取 current_date 快照，防止跨天瞬间 window_monitor 修改 current_date
+    # 导致文件名与数据内容日期不一致
     with thread_lock:
-        with open(str(file_name), "w", encoding="utf-8") as file:
+        save_date = current_date
+        # 防御：如果字典为空但存在当天数据文件，说明可能是竞态导致的空字典，
+        # 此时跳过本次保存，避免覆盖有效数据
+        if len(data) == 0:
+            existing = pathlib.Path(f"./history_data/data_{save_date}.json")
+            if existing.exists() and existing.stat().st_size > 50:
+                # 文件存在且有实质内容，跳过本次空写
+                return
+        with open(str(pathlib.Path(f"./history_data/data_{save_date}.json")), "w", encoding="utf-8") as file:
             json.dump(simple_data, file, ensure_ascii=False, indent=4)
 
 # 自动保存线程函数
