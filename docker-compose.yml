@@ -1,0 +1,102 @@
+# ============================================
+# Docker Compose — 设备使用时间追踪系统
+#
+# 服务清单：
+#   mysql    — MySQL 8.0 数据库
+#   redis    — Redis 7 缓存
+#   backend  — Spring Boot 后端 (Java 17)
+#   frontend — Vue3 前端 (Nginx)
+#
+# 使用方式：
+#   1. 复制 .env.example 为 .env 并填写真实值
+#   2. docker compose up -d
+# ============================================
+
+services:
+  # ========== MySQL 数据库 ==========
+  mysql:
+    image: mysql:8.0
+    container_name: dut-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: deviceusagetime
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./server/backend/src/main/resources/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ========== Redis 缓存 ==========
+  redis:
+    image: redis:7-alpine
+    container_name: dut-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ========== Spring Boot 后端 ==========
+  backend:
+    build:
+      context: ./server/backend
+      dockerfile: Dockerfile
+    container_name: dut-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    environment:
+      # 数据库连接（覆盖 application.yaml 中的占位符）
+      MYSQL_USER: root
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      # Redis
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      # 邮件
+      EMAIL_SENDER: ${EMAIL_SENDER}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD}
+      # JWT
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+      # JVM 参数
+      JAVA_OPTS: "-Xms256m -Xmx512m"
+    volumes:
+      - backend_logs:/app/logs
+
+  # ========== Vue3 前端 (Nginx) ==========
+  frontend:
+    build:
+      context: ./server/frontend
+      dockerfile: Dockerfile
+    container_name: dut-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    environment:
+      # 域名（Nginx server_name，仅处理该域名的请求）
+      DOMAIN: ${DOMAIN:-primordialcode.xyz}
+      # 后端地址（Nginx 反向代理目标，默认使用 Docker 内部网络）
+      BACKEND_HOST: ${BACKEND_HOST:-backend:8080}
+
+volumes:
+  mysql_data:
+  redis_data:
+  backend_logs:

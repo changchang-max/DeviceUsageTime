@@ -1,0 +1,23 @@
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+
+# IDE
+.vscode/
+
+# 环境变量（通过 docker-compose 注入）
+.env
+.env.production
+
+# Git
+.git/
+.gitignore
+
+# 文档
+*.md
+!README.md
+
+# 日志
+*.log

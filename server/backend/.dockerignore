@@ -1,0 +1,25 @@
+# Maven 构建产物
+target/
+
+# IDE
+.idea/
+*.iml
+
+# 日志
+logs/
+
+# 敏感文件（通过 docker-compose 环境变量注入）
+.env
+
+# Git
+.git/
+.gitattributes
+.gitignore
+
+# 文档
+HELP.md
+
+# Maven Wrapper（容器内使用全局 maven）
+.mvn/
+mvnw
+mvnw.cmd

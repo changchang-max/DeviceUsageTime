@@ -1,0 +1,46 @@
+# ============================================
+# Nginx 配置模板
+# 容器启动时由 envsubst 替换 ${DOMAIN} 和 ${BACKEND_HOST}
+#
+# 默认值（通过 docker-compose.yml 设置）：
+#   DOMAIN       = primordialcode.xyz
+#   BACKEND_HOST = localhost:8080
+# ============================================
+
+server {
+    listen       80;
+    server_name  ${DOMAIN};
+
+    # Gzip 压缩
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml text/javascript;
+    gzip_min_length 1024;
+
+    # 前端静态资源
+    location / {
+        root   /usr/share/nginx/html;
+        index  index.html;
+        try_files $uri $uri/ /index.html;  # SPA 路由回退
+    }
+
+    # REST API 反向代理到后端
+    location /api {
+        proxy_pass http://${BACKEND_HOST};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # WebSocket 反向代理到后端
+    location /ws {
+        proxy_pass http://${BACKEND_HOST};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
