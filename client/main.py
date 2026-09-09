@@ -86,6 +86,10 @@ input_lock = threading.Lock()
 # 而非把所有应用时长相加(多应用并发运行时相加会成倍虚高)。跨天随应用字典一起清零。
 run_duration: int = 0
 
+# UI 冻结标志：当用户打开模态对话框（如重命名备注框）时设为 True，
+# 此时 window_monitor 线程跳过 add_row 刷新，避免 UI 线程被大量 setItem 操作阻塞导致卡顿。
+ui_freeze: bool = False
+
 
 # 更新上传状态(供上传线程调用)
 def set_upload_stage(stage: str, text: str, error: str = ""):
@@ -198,27 +202,36 @@ def is_user_app(proc: psutil.Process) -> bool:
 
  
 def get_user_app_pids() -> dict:
+    # 首先只用 process_iter 获取 name 和 pid（轻量操作），
+    # 用进程名初步过滤掉明显是系统进程的条目，减少后续 is_user_app 中
+    # 昂贵的 proc.exe() / proc.username() 调用次数
+    result = {}
     user_procs = []
+    pid_map = {}
 
-    # ① 先收集所有“用户应用进程”
     for proc in psutil.process_iter(['pid', 'name']):
+        try:
+            pname = proc.name()
+        except (psutil.AccessDenied, psutil.NoSuchProcess):
+            continue
+
+        # 快速预过滤：跳过明显的系统进程名（svchost, System, Idle 等）
+        if not pname or pname.lower() in _SYSTEM_PROC_NAMES:
+            continue
+
+        # 需要通过 is_user_app 进一步过滤
         if is_user_app(proc):
             user_procs.append(proc)
+            pid_map[proc.pid] = proc
 
-    # ② 建立 pid 映射
-    pid_map = {p.pid: p for p in user_procs}
-
-    result = {}
-
-    # ③ 过滤子进程（方案 1）
+    # 过滤子进程：如果父进程不在用户进程集合中 → 保留
     for proc in user_procs:
         try:
-            # 如果父进程不在用户进程集合中 → 保留
             if proc.ppid() not in pid_map:
                 result[proc.name()] = {
                     "pid": proc.pid,
                     "title": proc.name(),
-                    "use_time":0
+                    "use_time": 0
                 }
         except (psutil.AccessDenied, psutil.NoSuchProcess):
             continue
@@ -226,6 +239,13 @@ def get_user_app_pids() -> dict:
     return result
 
 
+# 明显的系统进程名（小写），在 get_user_app_pids 中快速跳过，避免调用昂贵的 exe()/username()
+_SYSTEM_PROC_NAMES = frozenset({
+    "system idle process", "system", "registry", "smss.exe", "csrss.exe",
+    "wininit.exe", "services.exe", "lsass.exe", "svchost.exe", "winlogon.exe",
+    "dwm.exe", "spoolsv.exe", "fontdrvhost.exe", "memory compression",
+    "secure system", "audiodg.exe",
+})
 
 # 每秒获取所有窗口活动状态
 def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict,the_old_date_application_dict:dict):
@@ -236,6 +256,10 @@ def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict,the_old_
     global old_date_status  # 是否处于查看历史信息状态true/flase
     global old_date_refrush_flag    # 用来标记主窗口是否已经刷新过
     global run_duration  # 客户端程序今日运行时长(秒)
+    global _row_index_cache
+
+    # 排序计数器：避免每秒都重复排序，改为每 5 秒排序一次
+    _sort_counter = 0
 
     while not stop_event.is_set():
         # 判断是否为新的日期
@@ -244,7 +268,7 @@ def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict,the_old_
             # 跨天
             with thread_lock:
                 all_applications_dict.clear()#清空字典
-                tableWidget.setRowCount(0)#清空表单
+                _row_index_cache.clear()
                 current_date = new_date
                 run_duration = 0  # 新的一天客户端运行时长重新从0累计
             # 跨天时同步重置输入统计计数器
@@ -256,11 +280,11 @@ def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict,the_old_
                 _last_mouse_pos = None
 
 
+        # 将慢速的 psutil 进程枚举移到锁外，避免 I/O 阻塞其他线程
+        current_procs = get_user_app_pids()
+
         # 加上线程锁防止资源竞争
         with thread_lock:
-            # 获取当前用户应用进程
-            current_procs = get_user_app_pids()
-
             # 同步“当前正在运行的应用”集合，供上传线程过滤已关闭的应用
             current_running_apps.clear()
             current_running_apps.update(current_procs.keys())
@@ -284,35 +308,20 @@ def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict,the_old_
         # old_date_status = False是正常状态，即历史模式未开启状态
         # 排序操作放在 thread_lock 内，防止 sort_dict 中的 clear()+update()
         # 与 auto_save_thread 的 save_data() 发生竞态，导致当天数据被清空
-        with thread_lock:
-            if old_date_status is False:
-                new_dict = Sort(all_applications_dict).sort(config_File.get_sort_type())
-                all_applications_dict.clear()
-                all_applications_dict.update(new_dict)
-            else:
-                new_dict = Sort(the_old_date_application_dict).sort(config_File.get_sort_type())
-                the_old_date_application_dict.clear()
-                the_old_date_application_dict.update(new_dict)
+        # 优化：每 5 秒排序一次，避免每秒重复排序造成不必要的 CPU 开销
+        _sort_counter += 1
+        if _sort_counter >= 5:
+            _sort_counter = 0
+            with thread_lock:
+                if old_date_status is False:
+                    new_dict = Sort(all_applications_dict).sort(config_File.get_sort_type())
+                    all_applications_dict.clear()
+                    all_applications_dict.update(new_dict)
+                else:
+                    new_dict = Sort(the_old_date_application_dict).sort(config_File.get_sort_type())
+                    the_old_date_application_dict.clear()
+                    the_old_date_application_dict.update(new_dict)
         
-
-        try:
-            # 判断是否处于查看历史信息状态,默认为false，不处于
-            if old_date_status is not False:
-                if old_date_refrush_flag is False:
-                    tableWidget.setRowCount(0) #清空表单
-                    old_date_refrush_flag = True    # 标记为已刷新
-                # print("当前处于历史状态")
-                add_row(tableWidget, the_old_date_application_dict)
-            else:
-                if old_date_refrush_flag is False:
-                    tableWidget.setRowCount(0) #清空表单
-                    old_date_refrush_flag = True    # 标记为已刷新
-                # 调用关键函数,向表中添加行
-                # print("当前处于实时状态")
-                add_row(tableWidget, all_applications_dict)
-        except Exception as e:
-            logging.error(f"window_monitor函数出错了: {str(e)}")
-            print(f"Error in window_monitor: {str(e)}")
 
         time.sleep(1) #每隔一秒捕获一次
 
@@ -331,13 +340,31 @@ def is_exist(tableWidget: QTableWidget, column: int, value) -> bool:
             return table_row
     return False
 
+# 进程名 → 行号 快速查找缓存，避免 add_row 中的 O(n²) 遍历
+# 在切换到历史数据时由 setRowCount(0) 清空
+_row_index_cache: dict = {}
+
 # (QTableWidget对象,标题列表)向表中添加行
 def add_row(tableWidget: QTableWidget, all_applications_dict: dict):
-    global alias_file
+    global alias_file, _row_index_cache, ui_freeze
+
+    # 若表格行数归零（切换数据源），则重建缓存
+    if tableWidget.rowCount() == 0:
+        _row_index_cache.clear()
+
+    # 若 UI 被冻结（如正在编辑备注对话框），跳过本次刷新，避免积累大量操作
+    if ui_freeze:
+        return
+
     for title, proc_info in all_applications_dict.items():
         proc_name = proc_info["title"]
-        # 先判断表里有没有，有则更改其值，没有则添加新行
-        tabel_row = is_exist(tableWidget, 1, proc_name)
+        # 优先用缓存查找行号，缓存未命中再回退到 is_exist 遍历
+        tabel_row = _row_index_cache.get(proc_name)
+        if tabel_row is None:
+            tabel_row = is_exist(tableWidget, 1, proc_name)
+            if tabel_row is not False:
+                _row_index_cache[proc_name] = tabel_row
+
         if tabel_row is not False:
             # time已经在字典里更新好了，可以直接用字典的内容覆盖上去
             Item_new_time = QTableWidgetItem(mytools.get_strtime(proc_info["use_time"]))
@@ -367,6 +394,9 @@ def add_row(tableWidget: QTableWidget, all_applications_dict: dict):
             tableWidget.setItem(row, 0, Item_id)  # id
             tableWidget.setItem(row, 1, Item_title)  # title（显示备注名）
             tableWidget.setItem(row, 2, Item_time)  # time
+
+            # 将新行加入缓存
+            _row_index_cache[proc_name] = row
 
 # 将base64字符串转成QPixmap(相当于图片文件了)
 def to_image(base64_str:str):
@@ -756,10 +786,14 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         
 
 
-        # 启动监控线程
+        # 启动监控线程（后台线程只更新数据字典，不再操作 GUI）
         self.thread_windows_listening = threading.Thread(target=window_monitor, args=(self.tableWidget,self.all_applications_dict,self.the_old_date_application_dict))
         self.thread_windows_listening.daemon = True  # 主线程退出时自动结束
         self.thread_windows_listening.start()
+        # 启动主线程定时器，每秒刷新表格（GUI 操作必须在主线程执行）
+        self.refresh_timer = QTimer(self)
+        self.refresh_timer.timeout.connect(self.refresh_table)
+        self.refresh_timer.start(1000)
         # 启动自动保存json文件线程
         self.thread_auto_save = threading.Thread(target=auto_save_thread, args=(self.all_applications_dict,))
         self.thread_auto_save.daemon = True  # 主线程退出时自动结束
@@ -844,7 +878,31 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.action_useTime_down.triggered.connect(lambda: self.sort_change("useTime_down"))
     
 
-    # 双击表格单元格 → 弹出备注编辑对话框（仅对标题列生效）
+    # 主线程定时刷新表格（由 QTimer 每秒触发）
+    # 后台线程 window_monitor 只更新数据字典，GUI 操作全部集中在此方法
+    def refresh_table(self):
+        global old_date_status, old_date_refrush_flag, ui_freeze
+        # 若 UI 被冻结（如正在编辑备注对话框），跳过本次刷新
+        if ui_freeze:
+            return
+
+        try:
+            if old_date_status is not False:
+                if old_date_refrush_flag is False:
+                    self.tableWidget.setRowCount(0)
+                    old_date_refrush_flag = True
+                add_row(self.tableWidget, self.the_old_date_application_dict)
+            else:
+                if old_date_refrush_flag is False:
+                    self.tableWidget.setRowCount(0)
+                    old_date_refrush_flag = True
+                add_row(self.tableWidget, self.all_applications_dict)
+        except Exception as e:
+            logging.error(f"refresh_table 出错: {str(e)}")
+
+
+    # 双击表格单元格 → 在单元格内原地编辑备注（仅对标题列生效）
+    # 不再使用 QInputDialog 模态对话框，彻底避免模态对话框阻塞事件循环导致卡顿
     def on_cell_double_clicked(self, row: int, column: int):
         global alias_file
         # 只处理第1列（进程名/标题列）
@@ -860,22 +918,56 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         if proc_name is None:
             proc_name = item.text()
 
-        # 当前备注（若有）
+        # 当前备注（若无备注则显示原进程名作为占位提示）
         current_alias = alias_file._alias_dict.get(proc_name, "")
+        display_text = current_alias if current_alias else proc_name
 
-        text, ok = QInputDialog.getText(
-            self,
-            "编辑备注",
-            f"为进程 [{proc_name}] 设置备注名：\n（留空则清除备注）",
-            QLineEdit.Normal,
-            current_alias
-        )
+        # 在单元格内嵌入 QLineEdit，原地编辑
+        editor = QLineEdit(self.tableWidget)
+        editor.setText(display_text)
+        editor.setPlaceholderText("留空则清除备注")
+        editor.selectAll()
+        editor.setFocus()
 
-        if ok:
+        # 将 editor 放入单元格
+        self.tableWidget.setCellWidget(row, 1, editor)
+
+        # 编辑完成时保存（回车确认，Esc 取消）
+        # 使用防重入标志，避免 returnPressed 和 editingFinished 同时触发
+        _finished = [False]
+
+        def commit_edit():
+            if _finished[0]:
+                return
+            _finished[0] = True
+            editor.blockSignals(True)  # 防止 removeCellWidget 触发 editingFinished
+
+            text = editor.text().strip()
             alias_file.set_alias(proc_name, text)
-            # 立即刷新该行的显示文本
+            # 移除 editor，恢复为纯文本 QTableWidgetItem
+            self.tableWidget.removeCellWidget(row, 1)
             display_name = alias_file.get_alias(proc_name)
-            item.setText(display_name)
+            new_item = QTableWidgetItem(display_name)
+            new_item.setData(Qt.UserRole, proc_name)
+            new_item.setTextAlignment(Qt.AlignCenter)
+            self.tableWidget.setItem(row, 1, new_item)
+
+        def cancel_edit():
+            if _finished[0]:
+                return
+            _finished[0] = True
+            editor.blockSignals(True)
+            # 移除 editor，恢复原 QTableWidgetItem
+            self.tableWidget.removeCellWidget(row, 1)
+            # item 是原来的 QTableWidgetItem，重新设置回去
+            self.tableWidget.setItem(row, 1, item)
+
+        editor.returnPressed.connect(commit_edit)
+
+        # Esc 取消编辑：通过重写 keyPressEvent 无法直接做到（editor 是独立控件），
+        # 改用 editingFinished 在失去焦点时自动提交（用户点击其他地方 = 确认）
+        # 但需要防止 removeCellWidget 时二次触发
+        editor.editingFinished.connect(commit_edit)
 
     # 初始化“设置”窗口
     def init_Settings_Window(self):
@@ -1179,8 +1271,9 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
     
     # 主窗口页-表格排序动作函数
     def sort_change(self,target_type:str):
-        global config_File
+        global config_File, _row_index_cache
         self.tableWidget.setRowCount(0)
+        _row_index_cache.clear()
         match target_type:
             case "windowName_up":
                 config_File.set_sort_type("windowName_up")
@@ -1236,7 +1329,9 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
     def on_item_doubleClicked(self,item):
         global old_date_status
         global old_date_refrush_flag
+        global _row_index_cache
         old_date_refrush_flag = False
+        _row_index_cache.clear()
         
         if item.text() == f"data_{current_date}.json":
             # 点击当天日期后，将查看历史数据功能关闭
