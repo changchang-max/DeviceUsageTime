@@ -297,22 +297,21 @@ def window_monitor(tableWidget: QTableWidget,all_applications_dict:dict,the_old_
 
         # 加上线程锁防止资源竞争
         with thread_lock:
-            # 过滤掉被屏蔽的进程（不被跟踪时间、不上传、不显示）
             blocked_set = blocked_file.get_all_blocked()
-            current_procs_filtered = {k: v for k, v in current_procs.items() if k not in blocked_set}
 
-            # 同步“当前正在运行的应用”集合，供上传线程过滤已关闭的应用
+            # 同步“当前正在运行的应用”集合，供上传线程使用（排除被屏蔽的进程）
             current_running_apps.clear()
-            current_running_apps.update(current_procs_filtered.keys())
+            current_running_apps.update({k for k in current_procs if k not in blocked_set})
 
-            # 更新all_applications_dict
-            # 1. 对现有进程的use_time+1
+            # 更新 all_applications_dict：包含所有进程（包括被屏蔽的），
+            # 被屏蔽的进程仍继续累加时间，但不显示、不上传
+            # 1. 对所有正在运行的进程 use_time +1
             for title in list(all_applications_dict.keys()):
-                if title in current_procs_filtered:
+                if title in current_procs:
                     all_applications_dict[title]["use_time"] += 1
 
-            # 2. 添加新进程
-            for title, proc_info in current_procs_filtered.items():
+            # 2. 添加新进程（被屏蔽的也加入字典，确保时间持续累计）
+            for title, proc_info in current_procs.items():
                 if title not in all_applications_dict:
                     all_applications_dict[title] = proc_info.copy()
                     all_applications_dict[title]["use_time"] = 1
@@ -1081,12 +1080,13 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
 
     # 屏蔽指定进程
     def block_process(self, proc_name: str):
-        """将指定进程加入屏蔽列表，立即从表格移除并停止上传"""
+        """将指定进程加入屏蔽列表，立即从表格移除并停止上传。
+        
+        注意：进程仍在 all_applications_dict 中持续累积时间，
+        只是不显示在表格中、不上传给服务器。
+        """
         global blocked_file, _row_index_cache, old_date_refrush_flag
         blocked_file.block(proc_name)
-        # 从字典中移除以停止计时，锁保护避免与 window_monitor 线程竞争
-        with thread_lock:
-            self.all_applications_dict.pop(proc_name, None)
         # 清空表格 + 缓存，强制完整重建
         self.tableWidget.setRowCount(0)
         _row_index_cache.clear()
@@ -1320,8 +1320,11 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
                 unchecked_count += 1
 
         if unchecked_count > 0:
+            # 清除行缓存，强制主表格完整重建（解除屏蔽的进程会重新出现）
             _row_index_cache.clear()
+            self.tableWidget.setRowCount(0)
             self._refresh_blocked_list()
+            self.refresh_table()
             self.tray_icon.showMessage(
                 "屏幕视奸器",
                 f"已解除 {unchecked_count} 个进程的屏蔽",
