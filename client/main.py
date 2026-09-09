@@ -949,7 +949,7 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
             display_name = alias_file.get_alias(proc_name)
             new_item = QTableWidgetItem(display_name)
             new_item.setData(Qt.UserRole, proc_name)
-            new_item.setTextAlignment(Qt.AlignCenter)
+            new_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             self.tableWidget.setItem(row, 1, new_item)
 
         def cancel_edit():
