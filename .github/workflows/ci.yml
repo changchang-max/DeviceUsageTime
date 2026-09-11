@@ -15,6 +15,67 @@ on:
 # 定义所有任务（Job）
 jobs:
 
+  # ============================
+  # Job 2：打包 Windows 客户端 exe
+  # ============================
+  build-client:
+
+    # Windows 环境才能用 PyInstaller 打出 exe
+    runs-on: windows-latest
+
+    steps:
+
+      # Step 1：下载仓库源码
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Step 2：安装 Python 环境
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: pip
+          cache-dependency-path: client/package.txt
+
+      # Step 3：安装 Python 依赖
+      - name: Install Dependencies
+        working-directory: client
+        run: pip install -r package.txt
+
+      # Step 4：用 PyInstaller 打包为单文件 exe
+      - name: Build exe with PyInstaller
+        working-directory: client
+        run: pyinstaller -F -w -i icon.ico main.py --clean
+
+      # Step 5：将 exe 重命名为更有意义的名称
+      - name: Rename exe
+        working-directory: client
+        run: move dist\main.exe dist\DeviceUsageTime.exe
+
+      # Step 6：上传 exe 作为 workflow 构建产物（可在 Actions 页面直接下载）
+      - name: Upload exe as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeviceUsageTime-Windows-x64
+          path: client/dist/DeviceUsageTime.exe
+          if-no-files-found: error
+
+      # Step 7：发布到 GitHub Release（nightly 标签，每次推送自动更新）
+      - name: Upload to GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: nightly
+          name: "Nightly Build"
+          body: "自动构建自提交 ${{ github.sha }}
+          
+提交信息：${{ github.event.head_commit.message }}
+构建时间：${{ github.event.head_commit.timestamp }}"
+          artifacts: client/dist/DeviceUsageTime.exe
+          artifactContentType: application/x-msdownload
+          allowUpdates: true
+          replacesArtifacts: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
   # Job 的名字，可以随便起
   build:
 

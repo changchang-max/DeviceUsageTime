@@ -176,6 +176,18 @@ docs: 更新 API 文档和目录结构
 
 详见 `.github/workflows/ci.yml`。
 
+### Windows 客户端自动打包（新增）
+
+推送到 `main` 或 `web-LifeLog` 分支时，额外在 `windows-latest` 运行器上执行：
+
+1. 安装 Python 3.10 及 `client/package.txt` 依赖
+2. 执行 `pyinstaller -F -w -i icon.ico main.py --clean` 打包单文件 exe
+3. 将 exe 重命名为 `DeviceUsageTime.exe`
+4. 上传为 workflow 构建产物（Actions 页面可下载）
+5. 发布到 GitHub Release（`nightly` 标签，每次推送自动更新覆盖）
+
+> **注意**：如果只想构建 exe 而不触发 Release 更新，可以删掉第 7 步（Upload to GitHub Release），只保留 Artifact 上传。
+
 ## 配置文件说明
 
 ### 敏感信息
