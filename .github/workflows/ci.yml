@@ -12,6 +12,10 @@ on:
       - main          # main 分支
       - web-LifeLog   # web-LifeLog 分支
 
+
+permissions:
+  contents: write
+
 # 定义所有任务（Job）
 jobs:
 
