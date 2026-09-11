@@ -19,6 +19,7 @@ import json
 import pathlib
 import os
 import logging
+import hashlib
 import psutil
 
 """数据结构
@@ -715,6 +716,93 @@ class Init_BlockedFile:
             return sorted(self._blocked_set)
 
 
+# ==================== 密码加密与存储管理 ====================
+
+class PasswordManager:
+    """密码加密/解密工具。
+
+    使用 Windows 机器唯一标识（MachineGuid）作为密钥种子派生加密密钥，
+    确保加密后的密码文件无法在其他机器上解密。
+    加密方式：SHA-256 派生密钥 + XOR 流密码 + Base64 编码。
+    """
+
+    @staticmethod
+    def _get_machine_key() -> bytes:
+        """从 Windows MachineGuid 派生 32 字节加密密钥"""
+        try:
+            import winreg
+            reg_key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                                     r"SOFTWARE\Microsoft\Cryptography")
+            guid, _ = winreg.QueryValueEx(reg_key, "MachineGuid")
+            winreg.CloseKey(reg_key)
+            seed = guid.encode("utf-8")
+        except Exception:
+            # 降级方案：用主机名作为种子（至少与其他机器不同）
+            import socket
+            seed = socket.gethostname().encode("utf-8")
+        return hashlib.sha256(seed).digest()
+
+    @staticmethod
+    def encrypt(plaintext: str) -> str:
+        """加密明文，返回 Base64 编码的密文字符串"""
+        key = PasswordManager._get_machine_key()
+        data = plaintext.encode("utf-8")
+        # XOR 流密码：每个字节与密钥字节（循环）异或
+        ciphertext = bytes(data[i] ^ key[i % len(key)] for i in range(len(data)))
+        return base64.b64encode(ciphertext).decode("utf-8")
+
+    @staticmethod
+    def decrypt(cipher_b64: str) -> str:
+        """解密 Base64 编码的密文，返回明文字符串"""
+        key = PasswordManager._get_machine_key()
+        ciphertext = base64.b64decode(cipher_b64)
+        data = bytes(ciphertext[i] ^ key[i % len(key)] for i in range(len(ciphertext)))
+        return data.decode("utf-8")
+
+
+# 密码文件路径
+PASSWORD_FILE_PATH = pathlib.Path("./config/password.enc")
+
+
+def save_encrypted_password(email: str, password: str):
+    """将邮箱和加密后的密码保存到本地密码文件"""
+    try:
+        encrypted_pw = PasswordManager.encrypt(password)
+        data = {"email": email, "password": encrypted_pw}
+        PASSWORD_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(PASSWORD_FILE_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        logging.error(f"保存加密密码失败: {e}")
+
+
+def load_encrypted_password() -> tuple:
+    """从本地密码文件读取邮箱和加密密码，返回 (email, password) 或 (None, None)"""
+    try:
+        if not PASSWORD_FILE_PATH.exists() or not PASSWORD_FILE_PATH.is_file():
+            return None, None
+        with open(PASSWORD_FILE_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        email = data.get("email", "")
+        encrypted_pw = data.get("password", "")
+        if not email or not encrypted_pw:
+            return None, None
+        password = PasswordManager.decrypt(encrypted_pw)
+        return email, password
+    except Exception as e:
+        logging.error(f"读取加密密码失败: {e}")
+        return None, None
+
+
+def clear_encrypted_password():
+    """删除本地密码文件"""
+    try:
+        if PASSWORD_FILE_PATH.exists():
+            PASSWORD_FILE_PATH.unlink()
+    except Exception as e:
+        logging.error(f"删除密码文件失败: {e}")
+
+
 # 配置文件相关类（初始化、读取、修改）
 class Init_ConfigFile:
     # （先尝试从配置文件中拿到数据，如果拿不到则写入配置文件）
@@ -885,10 +973,15 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         # 登录/退出请求进行中标记，防止重复点击或重复打开设置窗口造成多个后台任务
         self._login_in_progress = False
         self._logout_in_progress = False
+        # 手动登录时暂存密码（登录成功后加密保存；自动登录时无此值）
+        self._pending_password = None
         # 定时检查上传状态变化(如登录失效/网络中断)，变化时用托盘气泡提示
         self.upload_notify_timer = QTimer(self)
         self.upload_notify_timer.timeout.connect(self.check_upload_notification)
         self.upload_notify_timer.start(2000)
+
+        # 程序启动时检测本地是否有加密保存的密码，若有则尝试自动登录
+        QTimer.singleShot(500, self.try_auto_login)
 
     # 退出程序时的确认窗口
     def open_exit_window(self):
@@ -1358,6 +1451,9 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.login_btn.setEnabled(False)
         self.account_status_label.setText("正在登录，请稍候…")
 
+        # 暂存密码，登录成功后用于本地加密保存（仅手动登录有此值）
+        self._pending_password = user_password
+
         # 后台线程调用登录接口，避免网络等待卡住界面
         self.login_worker = LoginWorker(user_email, user_password, server_url)
         self.login_worker.login_success.connect(
@@ -1372,6 +1468,13 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         config_File.set_server_url(server_url)
         config_File.set_user_email(user_email)
         config_File.set_token(token)
+
+        # 手动登录成功：将密码加密保存到本地，供下次启动时自动登录
+        pending_pw = getattr(self, "_pending_password", None)
+        if pending_pw:
+            save_encrypted_password(user_email, pending_pw)
+            self._pending_password = None
+
         self.pass_edit.clear()
         self.account_status_label.setText("登录成功，开始每秒上传数据…")
         # 托盘气泡提示
@@ -1385,6 +1488,46 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self.account_status_label.setText(f"登录失败：{error_message}")
         # 托盘气泡提示
         self.tray_icon.showMessage("屏幕视奸器", f"登录失败：{error_message}", QSystemTrayIcon.Warning, 3000)
+
+    # 程序启动时尝试自动登录（读取本地加密保存的密码）
+    def try_auto_login(self):
+        """读取本地加密密码文件，若存在则尝试自动登录"""
+        email, password = load_encrypted_password()
+        if not email or not password:
+            return  # 没有保存的密码，跳过自动登录
+
+        server_url = config_File.get_server_url()
+        logging.info("检测到本地加密密码，尝试自动登录…")
+
+        self._pending_password = None  # 自动登录不保存密码，避免覆盖已有凭据
+        self._login_in_progress = True
+
+        # 后台线程调用登录接口
+        self.login_worker = LoginWorker(email, password, server_url)
+        self.login_worker.login_success.connect(
+            lambda token: self._on_auto_login_success(email, server_url, token))
+        self.login_worker.login_failed.connect(self._on_auto_login_failed)
+        self.login_worker.start()
+
+    # 自动登录成功回调
+    def _on_auto_login_success(self, user_email: str, server_url: str, token: str):
+        self._login_in_progress = False
+        # 保存登录信息到本地配置(上传线程每秒读取)
+        config_File.set_server_url(server_url)
+        config_File.set_user_email(user_email)
+        config_File.set_token(token)
+        logging.info("自动登录成功")
+        # 托盘气泡提示
+        self.tray_icon.showMessage(
+            "屏幕视奸器", "自动登录成功，开始每秒上传数据",
+            QSystemTrayIcon.Information, 3000)
+
+    # 自动登录失败回调
+    def _on_auto_login_failed(self, error_message: str):
+        self._login_in_progress = False
+        logging.info(f"自动登录失败: {error_message}")
+        # 自动登录失败不弹托盘提示，避免频繁打扰用户
+        # 不清除密码文件，用户可在设置中手动点击登录修正
 
     # 点击“退出登录”
     def on_logout_clicked(self):
@@ -1411,6 +1554,8 @@ class MyMainWindow(QMainWindow, Ui_MainWindow):
         self._logout_in_progress = False
         config_File.set_token("")
         config_File.set_user_email("")
+        # 退出登录时同时清除本地加密保存的密码
+        clear_encrypted_password()
         with upload_lock:
             stage = upload_stage
         # 若此前正处于“登录失效”状态，需要复位阶段标记便于重新登录
