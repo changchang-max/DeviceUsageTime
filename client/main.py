@@ -61,6 +61,9 @@ upload_status_text = "未登录"
 upload_last_error = ""
 # 保护上传状态读写的小锁(设置窗口/上传线程分属不同线程)
 upload_lock = threading.Lock()
+# 连续上传失败计数（达到 MAX_FAIL_BEFORE_NOTIFY 次才提示用户）
+upload_fail_count = 0
+MAX_FAIL_BEFORE_NOTIFY = 5
 # 全局唯一的API客户端(登录后在登录worker里单独创建实例，避免与上传线程交叉使用)
 api_client = network.ApiClient()
 
@@ -477,6 +480,7 @@ def data_upload_thread(all_applications_dict: dict):
         user_email = config_File.get_user_email()
 
         if not token or not user_email:
+            upload_fail_count = 0  # 未登录时重置失败计数
             set_upload_stage("not_login", "未登录", "")
             time.sleep(1)
             continue
@@ -513,19 +517,27 @@ def data_upload_thread(all_applications_dict: dict):
                 snapshot, running_apps, foreground_name, foreground_title, user_email,
                 kb_count, mc_count, md_meters, running_seconds, alias_map)
             api_client.upload(upload_data)
+            upload_fail_count = 0  # 上传成功，重置失败计数
             set_upload_stage("ok", f"已连接，上次上传 {mytools.hour()}", "")
         except network.ApiException as e:
             if e.code in (401, 403):
                 # token已失效：清空本地token，等待用户重新登录
                 logging.error(f"数据上传失败，token失效: {e}")
                 config_File.set_token("")
+                upload_fail_count = 0  # token失效非网络波动，重置计数
                 set_upload_stage("invalid", "登录已失效，请重新登录", str(e))
             else:
-                set_upload_stage("error", "上传失败", str(e))
+                upload_fail_count += 1
+                if upload_fail_count >= MAX_FAIL_BEFORE_NOTIFY:
+                    set_upload_stage("error", "上传失败", str(e))
+                # 连续失败未达阈值时不改变上传状态，避免打扰用户
         except Exception as e:
             # 网络抖动等未知异常：记录日志后下个周期自动重试
             logging.error(f"数据上传异常: {str(e)}")
-            set_upload_stage("error", "上传失败", f"网络异常: {e}")
+            upload_fail_count += 1
+            if upload_fail_count >= MAX_FAIL_BEFORE_NOTIFY:
+                set_upload_stage("error", "上传失败", f"网络异常: {e}")
+            # 连续失败未达阈值时不改变上传状态
 
         time.sleep(1)  # 按要求每秒上传一次
 
