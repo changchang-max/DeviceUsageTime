@@ -24,6 +24,10 @@ a = Analysis(
         "webview.platforms.winforms",
         "clr_loader",
         "pythonnet",
+        # pystray 的 Windows 后端是运行时动态导入的，需显式声明
+        "pystray._win32",
+        "PIL.Image",
+        "PIL.ImageDraw",
     ],
     hookspath=[],
     hooksconfig={},

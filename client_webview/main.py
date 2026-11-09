@@ -31,6 +31,7 @@ from store import (
     HistoryStore,
     ensure_dirs,
 )
+from tray import TrayController
 
 # 崩溃日志写在程序目录下（与旧版保持一致，方便排查线上问题）
 logging.basicConfig(
@@ -48,6 +49,49 @@ def handle_exception(exc_type, exc_value, exc_traceback):
 
 
 sys.excepthook = handle_exception
+
+# 命名互斥量句柄需要一直持有，进程退出时由系统自动释放
+_single_instance_mutex = None
+
+
+def acquire_single_instance() -> bool:
+    """创建命名互斥量，保证同一时间只有一个客户端实例（项目约定）
+
+    返回:
+        bool: True 表示当前是第一个实例；False 表示已有实例在运行
+    """
+    global _single_instance_mutex
+    if sys.platform != "win32":
+        return True
+
+    import ctypes
+
+    kernel32 = ctypes.windll.kernel32
+    _single_instance_mutex = kernel32.CreateMutexW(None, False, "Local\\DeviceUsageTimeWebViewClient")
+    # GetLastError 返回 183 (ERROR_ALREADY_EXISTS) 说明互斥量已存在 → 已有实例
+    return kernel32.GetLastError() != 183
+
+
+def activate_existing_window() -> bool:
+    """把已运行的客户端窗口唤到前台
+
+    返回:
+        bool: 找到并激活返回 True
+    """
+    if sys.platform != "win32":
+        return False
+    try:
+        import ctypes
+
+        user32 = ctypes.windll.user32
+        hwnd = user32.FindWindowW(None, APP_TITLE)
+        if hwnd:
+            user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+            user32.SetForegroundWindow(hwnd)
+            return True
+    except Exception as e:
+        logging.warning(f"激活已有窗口失败: {e}")
+    return False
 
 
 def parse_args():
@@ -67,6 +111,13 @@ def parse_args():
 def main():
     """程序主流程：组装依赖 → 启动静态服务 → 创建窗口 → 进入 GUI 事件循环"""
     args = parse_args()
+
+    # 单实例：重复启动时把已有窗口唤到前台，然后直接退出
+    if not acquire_single_instance():
+        logging.info("检测到客户端已在运行，本次启动退出")
+        activate_existing_window()
+        return
+
     ensure_dirs()
 
     # ---------- 数据层 ----------
@@ -101,6 +152,23 @@ def main():
     # 拦截关闭按钮：返回 False 取消关闭，由前端弹出“确认退出”对话框
     window.events.closing += api.on_window_closing
 
+    # ---------- 系统托盘 ----------
+    # 托盘“退出程序”走与前端确认框相同的收尾流程（保存数据 + 停线程 + 销毁窗口）
+    tray = TrayController(
+        window=window,
+        icon_path=str(web_dir / "assets" / "icon.ico"),
+        title=APP_TITLE,
+        on_quit=lambda: api.confirm_exit(True),
+    )
+    tray.start()
+
+    def on_minimized():
+        """最小化时隐藏到托盘（与旧版 PyQt5 客户端行为一致）"""
+        tray.hide_window()
+        tray.notify("已最小化到托盘，单击图标可恢复")
+
+    window.events.minimized += on_minimized
+
     try:
         # private_mode=True：不落地浏览器缓存/ Cookie，避免在数据目录里生成几百 MB 的 WebView2 配置
         webview.start(
@@ -109,7 +177,8 @@ def main():
             icon=str(web_dir / "assets" / "icon.ico"),
         )
     finally:
-        # 事件循环退出后收尾：停线程、存数据、关静态服务
+        # 事件循环退出后收尾：停托盘、停线程、存数据、关静态服务
+        tray.stop()
         monitor.stop(save=True)
         server.stop()
 

@@ -6,7 +6,7 @@
 
 ```
 DeviceUsageTime/
-├── client/              # Python 桌面客户端（PyQt5）
+├── client/              # Python 桌面客户端（PyQt5，旧版）
 │   ├── main.py         # 程序入口
 │   ├── mytools.py      # 工具函数库
 │   ├── ui_*.py         # UI 界面文件
@@ -14,6 +14,18 @@ DeviceUsageTime/
 │   ├── config/         # 配置文件目录
 │   ├── history_data/   # 历史数据存储
 │   └── dist/           # 打包输出目录
+├── client_webview/      # Python 桌面客户端（pywebview + 前端，新版）
+│   ├── main.py         # 程序入口（窗口 + 静态服务 + 单实例 + 托盘）
+│   ├── api.py          # js_api 桥接层（前端 window.pywebview.api.*）
+│   ├── monitor.py      # 后台采集：进程时长 / 输入统计 / 保存 / 上传
+│   ├── store.py        # 配置、备注、屏蔽、密码、历史数据读写
+│   ├── server.py       # 本机静态文件服务
+│   ├── tray.py         # 系统托盘（最小化到托盘、显示/退出）
+│   ├── web/            # 前端界面（HTML + CSS + 原生 ES Module）
+│   ├── package.txt     # Python 依赖列表
+│   ├── main.spec       # PyInstaller 打包配置（含 web/ 资源）
+│   ├── config/         # 配置文件目录（已被忽略）
+│   └── history_data/   # 历史数据存储（已被忽略）
 ├── server/             # Web 端（Spring Boot + Vue3）
 │   ├── backend/        # Spring Boot 后端
 │   │   └── src/main/java/top/primordialcode/backend/
@@ -34,6 +46,8 @@ DeviceUsageTime/
 
 ### 客户端（Python）
 
+#### 旧版（PyQt5，`client/`）
+
 ```bash
 # 进入客户端目录
 cd client
@@ -45,6 +59,22 @@ pip install -r package.txt
 python main.py
 
 # 打包为 exe（使用 PyInstaller）
+pyinstaller main.spec
+```
+
+#### 新版（pywebview + 前端，`client_webview/`）
+
+```bash
+# 进入新版客户端目录
+cd client_webview
+
+# 安装依赖（需要 Python 3.10+）
+pip install -r package.txt
+
+# 运行程序（--debug 可开启审查元素）
+python main.py
+
+# 打包为 exe（必须用 main.spec，前端 web/ 资源会一并打入）
 pyinstaller main.spec
 ```
 
@@ -178,11 +208,11 @@ docs: 更新 API 文档和目录结构
 
 ### Windows 客户端自动打包（新增）
 
-推送到 `main` 或 `web-LifeLog` 分支时，额外在 `windows-latest` 运行器上执行：
+推送到 `main` 或 `web-LifeLog` 分支时，额外在 `windows-latest` 运行器上执行（当前打包新版 `client_webview`）：
 
-1. 安装 Python 3.10 及 `client/package.txt` 依赖
-2. 执行 `pyinstaller -F -w -i icon.ico main.py --clean` 打包单文件 exe
-3. 将 exe 重命名为 `DeviceUsageTime.exe`
+1. 安装 Python 3.10 及 `client_webview/package.txt` 依赖
+2. 在 `client_webview` 目录执行 `pyinstaller main.spec --noconfirm --clean` 打包单文件 exe
+3. 产物为 `client_webview/dist/DeviceUsageTime.exe`（spec 内已命名）
 4. 上传为 workflow 构建产物（Actions 页面可下载）
 5. 发布到 GitHub Release（`nightly` 标签，每次推送自动更新覆盖）
 
@@ -198,8 +228,10 @@ docs: 更新 API 文档和目录结构
 
 ### 客户端配置
 
-- `client/config/config.json`：用户配置（开机自启等状态）
-- `client/history_data/`：用户历史数据，已被忽略
+- `client/config/config.json`：旧版客户端用户配置（开机自启等状态）
+- `client/history_data/`：旧版客户端历史数据，已被忽略
+- `client_webview/config/config.json`：新版客户端用户配置（排序方式、开机自启、服务器地址、登录信息）
+- `client_webview/history_data/`：新版客户端历史数据，已被忽略（与旧版格式兼容，可直接互读）
 
 ## 架构说明
 
@@ -223,7 +255,7 @@ WebSocket 连接：`ws://localhost:8080/ws/device?token=xxx`
 2. **Python 版本**：必须使用 Python 3.10+
 3. **Java 版本**：必须使用 Java 17+
 4. **日志文件**：`server/backend/logs` 已被忽略，禁止提交
-5. **单实例运行**：客户端程序同时只允许一个实例运行
+5. **单实例运行**：客户端程序同时只允许一个实例运行（新版 `client_webview` 已通过命名互斥量实现，重复启动会把已有窗口唤到前台后退出）
 
 ## 相关链接
 

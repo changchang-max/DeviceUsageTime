@@ -249,12 +249,18 @@ function bindExitModal() {
     if (event.key === "Escape" && !modal.hidden) hide();
   });
 
-  // 供 Python 端 evaluate_js 调用
+  // 供 Python 端 evaluate_js 调用（关闭确认框、托盘菜单等）
   window.APP = {
     showExitConfirm() {
       modal.hidden = false;
       confirmBtn.disabled = false;
       cancelBtn.focus();
+    },
+    openSettings() {
+      setView("settings");
+    },
+    showMain() {
+      setView("main");
     },
   };
 }
