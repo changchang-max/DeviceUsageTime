@@ -97,4 +97,26 @@ public interface UserAuthMapper {
      * @return 受影响的行数
      */
     int revokeKey(@Param("email") String email);
+
+    /**
+     * 根据上传凭证查询用户邮箱
+     * @param credential 上传凭证
+     * @return 用户实体类，包含user_email
+     */
+    UserAuthEntity selectByUploadCredential(@Param("credential") String credential);
+
+    /**
+     * 更新用户的上传凭证
+     * @param email 用户邮箱
+     * @param credential 新的上传凭证
+     * @return 受影响的行数
+     */
+    int updateUploadCredential(@Param("email") String email, @Param("credential") String credential);
+
+    /**
+     * 作废用户上传凭证(设置为null)
+     * @param email 用户邮箱
+     * @return 受影响的行数
+     */
+    int revokeUploadCredential(@Param("email") String email);
 }

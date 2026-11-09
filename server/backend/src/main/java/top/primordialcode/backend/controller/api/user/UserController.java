@@ -41,6 +41,7 @@ public class UserController {
             UserProfileVO profileVO = new UserProfileVO();
             profileVO.setEmail(user.getUser_email());
             profileVO.setSecretKey(user.getUser_key());
+            profileVO.setUploadCredential(user.getUpload_credential());
             profileVO.setCreatedAt(user.getCreated_at());
             profileVO.setLastLoginAt(user.getLast_login_at());
             
@@ -98,6 +99,46 @@ public class UserController {
         } catch (RuntimeException e) {
             log.error("作废秘钥失败：{}", e.getMessage());
             return Result.error(500, "作废秘钥失败", null);
+        }
+    }
+
+    /**
+     * 重新生成上传凭证
+     * @return 新的上传凭证
+     */
+    @PostMapping("/regenerate-upload-credential")
+    public Result regenerateUploadCredential() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String email = (String) authentication.getPrincipal();
+        
+        log.info("用户请求重新生成上传凭证，邮箱：{}", email);
+        
+        try {
+            String newCredential = userService.regenerateUploadCredential(email);
+            return Result.success("上传凭证已重新生成", newCredential);
+        } catch (RuntimeException e) {
+            log.error("重新生成上传凭证失败：{}", e.getMessage());
+            return Result.error(500, "重新生成上传凭证失败", null);
+        }
+    }
+
+    /**
+     * 作废上传凭证
+     * @return 操作结果
+     */
+    @PostMapping("/revoke-upload-credential")
+    public Result revokeUploadCredential() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String email = (String) authentication.getPrincipal();
+        
+        log.info("用户请求作废上传凭证，邮箱：{}", email);
+        
+        try {
+            userService.revokeUploadCredential(email);
+            return Result.success("上传凭证已作废", null);
+        } catch (RuntimeException e) {
+            log.error("作废上传凭证失败：{}", e.getMessage());
+            return Result.error(500, "作废上传凭证失败", null);
         }
     }
 }

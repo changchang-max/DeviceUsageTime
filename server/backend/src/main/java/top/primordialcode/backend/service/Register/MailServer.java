@@ -217,6 +217,8 @@ public class MailServer implements MailServerImpl {
         String encodePassword = passwordEncoder.encode(user_password);
         // 生成32位的随机秘钥
         String user_key = GenKeyUtil.generateKey(32);
+        // 生成16位的上传凭证
+        String uploadCredential = GenKeyUtil.generateKey(16);
 
         // 获取当前时间
         Instant createdAt = Instant.now();
@@ -226,6 +228,7 @@ public class MailServer implements MailServerImpl {
         userAuthEntity.setUser_email(user_email);
         userAuthEntity.setUser_password(encodePassword);
         userAuthEntity.setUser_key(user_key);
+        userAuthEntity.setUpload_credential(uploadCredential);
         userAuthEntity.setCreated_at(createdAt);
 
 
@@ -242,6 +245,7 @@ public class MailServer implements MailServerImpl {
             UserRegisterDTO userRegisterDTO = new UserRegisterDTO();
             userRegisterDTO.setEmail(user_email);
             userRegisterDTO.setUser_key(user_key);
+            userRegisterDTO.setUpload_credential(uploadCredential);
             userRegisterDTO.setCreatedAt(Instant.now());
 
             return new Result(201,"注册成功", userRegisterDTO);

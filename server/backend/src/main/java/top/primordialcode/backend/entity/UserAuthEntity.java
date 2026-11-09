@@ -14,6 +14,9 @@ public class UserAuthEntity {
 
     private String user_key;
 
+    /** Upload credential: an alternative identifier for data upload without login */
+    private String upload_credential;
+
     private String user_name;
 
     private Instant created_at;

@@ -12,6 +12,12 @@ import java.util.List;
 @Data
 public class DataUploadMainDTO {
 
+    /** Upload credential for identification (no login required) */
+    private String uploadCredential;
+
+    /** Flag indicating this is test data - when true, data won't be pushed to frontend */
+    private Boolean isTestData;
+
     private String userEmail;
 
     @NotNull(message = "时间戳不能为空")

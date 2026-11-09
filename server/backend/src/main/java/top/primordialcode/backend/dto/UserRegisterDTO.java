@@ -10,5 +10,8 @@ public class UserRegisterDTO {
 
     private String user_key;
 
+    /** Upload credential auto-generated at registration */
+    private String upload_credential;
+
     private Instant createdAt;
 }

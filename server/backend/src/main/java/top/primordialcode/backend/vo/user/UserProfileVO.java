@@ -21,6 +21,11 @@ public class UserProfileVO {
     private String secretKey;
     
     /**
+     * 上传凭证
+     */
+    private String uploadCredential;
+    
+    /**
      * 账户创建时间
      */
     private Instant createdAt;

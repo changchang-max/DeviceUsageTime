@@ -8,9 +8,9 @@ import top.primordialcode.backend.dto.DataUpload.DataUploadMainDTO;
 import top.primordialcode.backend.dto.DataUpload.RedisSaveOtherDataDTO;
 import top.primordialcode.backend.dto.DataUpload.StatisticsDTO;
 import top.primordialcode.backend.service.Redis.RedisDataUploadServer;
+import top.primordialcode.backend.service.UploadCredential.UploadCredentialServer;
 import top.primordialcode.backend.service.WebSocket.DeviceWebSocketHandler;
 import top.primordialcode.backend.utils.DataDateUtil;
-import top.primordialcode.backend.utils.JwtTokenUtil;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -21,22 +21,23 @@ import java.util.List;
 @Service
 public class DataUploadServer {
     @Autowired
-    JwtTokenUtil jwtTokenUtil;
-    @Autowired
     RedisDataUploadServer redisDataUploadServer;
     @Autowired
     DeviceWebSocketHandler handler;
     @Autowired
     DataArchiveServer dataArchiveServer;
+    @Autowired
+    UploadCredentialServer uploadCredentialServer;
 
-    public void receive(String Authorization, DataUploadMainDTO data){
-        // 验证Authorization并获取用户邮箱
-        String userEmail;
-        try {
-            userEmail = jwtTokenUtil.getSubject(Authorization);
-        } catch (RuntimeException e) {
-            throw new SecurityException("Token验证失败: " + e.getMessage());
+    public void receive(DataUploadMainDTO data){
+        // Resolve user identity from upload credential
+        String userEmail = resolveUserIdentity(data);
+        if (userEmail == null) {
+            throw new IllegalArgumentException("上传凭证无效");
         }
+
+        // Detect test data: if isTestData is true, skip WebSocket push
+        boolean isTestData = Boolean.TRUE.equals(data.getIsTestData());
 
         // 验证数据完整性
         if (data.getTimestamp() == null) {
@@ -91,6 +92,12 @@ public class DataUploadServer {
             log.error("历史数据归档失败: " + e.getMessage(), e);
         }
 
+        // 如果是测试数据，不推送给前端
+        if (isTestData) {
+            log.debug("测试数据上传，不推送实时更新: userId={}, date={}", userEmail, dataDate);
+            return;
+        }
+
         // 仅当上传数据归属"今天"时才推送给实时查看者(协议7.4)。
         // 其他日期的上传(如客户端补传历史)只会归档进MySQL供日历查询，
         // 若也推送实时更新会把历史快照覆盖到查看者正在看的"今日实时页"。
@@ -127,6 +134,31 @@ public class DataUploadServer {
             // WebSocket推送失败不应该影响数据存储，只记录日志
             log.error("WebSocket推送失败: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     从上传凭证中解析用户邮箱，若无法解析，则回退到 userEmail 字段。
+     @param data 上传数据 DTO
+     @return 解析后的用户邮箱；如果无法解析身份，则返回 null
+     */
+    private String resolveUserIdentity(DataUploadMainDTO data) {
+        String credential = data.getUploadCredential();
+        
+        // Try upload credential first
+        if (credential != null && !credential.isBlank()) {
+            String email = uploadCredentialServer.resolveEmail(credential);
+            if (email != null) {
+                data.setUserEmail(email);
+                return email;
+            }
+        }
+
+        // Fallback to userEmail field in the request body (legacy support)
+        if (data.getUserEmail() != null && !data.getUserEmail().isBlank()) {
+            return data.getUserEmail();
+        }
+
+        return null;
     }
 
     /**

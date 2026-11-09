@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>屏幕视奸器</title>
+  <link rel="icon" href="assets/icon.ico">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="app">
+    <!-- ==================== 顶栏 ==================== -->
+    <header class="topbar">
+      <div class="brand">
+        <img class="brand-logo" src="assets/icon.ico" alt="logo">
+        <div class="brand-text">
+          <h1>屏幕视奸器</h1>
+          <p>本机应用使用时长监控</p>
+        </div>
+      </div>
+
+      <div class="topbar-right">
+        <span class="status-pill" id="upload-pill" data-stage="not_login" title="数据上传状态">
+          <i class="pill-dot"></i>
+          <span class="pill-text">未登录</span>
+        </span>
+        <nav class="view-nav" id="view-nav">
+          <button type="button" class="nav-btn is-active" data-view="main">概览</button>
+          <button type="button" class="nav-btn" data-view="history">历史</button>
+          <button type="button" class="nav-btn" data-view="settings">设置</button>
+        </nav>
+      </div>
+    </header>
+
+    <!-- ==================== 历史模式提示条 ==================== -->
+    <div class="banner" id="history-banner" hidden>
+      <span class="banner-text" id="history-banner-text">正在查看历史数据</span>
+      <button type="button" class="btn btn-sm" id="btn-back-today">返回今天</button>
+    </div>
+
+    <!-- ==================== 内容区 ==================== -->
+    <main class="content">
+      <!-- ---------- 概览 ---------- -->
+      <section class="view" id="view-main">
+        <div class="stat-grid">
+          <div class="stat-card">
+            <span class="stat-label">键盘敲击</span>
+            <div class="stat-line">
+              <strong class="stat-value" id="stat-keyboard">0</strong>
+              <span class="stat-unit">次</span>
+            </div>
+            <span class="stat-foot">今日累计按键次数</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">鼠标点击</span>
+            <div class="stat-line">
+              <strong class="stat-value" id="stat-mouse">0</strong>
+              <span class="stat-unit">次</span>
+            </div>
+            <span class="stat-foot">不含滚轮滚动</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">鼠标移动</span>
+            <div class="stat-line">
+              <strong class="stat-value" id="stat-distance">0</strong>
+              <span class="stat-unit">米</span>
+            </div>
+            <span class="stat-foot">屏幕平面累计位移</span>
+          </div>
+          <div class="stat-card stat-card-accent">
+            <span class="stat-label">本程序运行时长</span>
+            <div class="stat-line">
+              <strong class="stat-value" id="stat-duration">00:00:00</strong>
+            </div>
+            <span class="stat-foot">今日监控总时长 ≈ 设备使用时长</span>
+          </div>
+        </div>
+
+        <div class="panel panel-grow">
+          <div class="panel-header">
+            <div class="search-box">
+              <svg viewBox="0 0 24 24" class="search-icon" aria-hidden="true">
+                <path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/>
+              </svg>
+              <input type="search" id="search-input" placeholder="搜索应用名称…" autocomplete="off">
+            </div>
+            <div class="panel-tools">
+              <span class="app-count" id="app-count">0 个应用</span>
+              <div class="select-wrap">
+                <span class="select-label">排序</span>
+                <div class="dropdown" id="sort-dropdown">
+                  <button type="button" class="dropdown-trigger" id="sort-trigger" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="dropdown-value" id="sort-value">时长 从高到低</span>
+                    <svg class="dropdown-caret" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M7.4 9.6 12 14.2l4.6-4.6L18 11l-6 6-6-6z"/>
+                    </svg>
+                  </button>
+                  <div class="dropdown-menu" id="sort-menu" role="listbox" hidden>
+                    <button type="button" class="dropdown-item" data-value="useTime_down" role="option">时长 从高到低</button>
+                    <button type="button" class="dropdown-item" data-value="useTime_up" role="option">时长 从低到高</button>
+                    <button type="button" class="dropdown-item" data-value="windowName_up" role="option">名称 从低到高</button>
+                    <button type="button" class="dropdown-item" data-value="windowName_down" role="option">名称 从高到低</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="table-scroll">
+            <table class="app-table">
+              <thead>
+                <tr>
+                  <th class="col-index">#</th>
+                  <th class="col-name">标题</th>
+                  <th class="col-time">使用时长</th>
+                  <th class="col-action"><span class="sr-only">操作</span></th>
+                </tr>
+              </thead>
+              <tbody id="app-tbody"></tbody>
+            </table>
+            <div class="empty-state" id="app-empty" hidden>
+              <p class="empty-title">暂无监控数据</p>
+              <p class="empty-desc">程序正在每秒采集本机应用，稍候即可看到列表</p>
+            </div>
+          </div>
+
+          <p class="panel-foot">
+            <span>双击标题可设置备注名</span>
+            <span class="dot-sep">·</span>
+            <span>右键任意一行可屏蔽该进程</span>
+          </p>
+        </div>
+      </section>
+
+      <!-- ---------- 历史 ---------- -->
+      <section class="view" id="view-history" hidden>
+        <div class="panel panel-grow">
+          <div class="panel-header">
+            <h2 class="panel-title">历史记录</h2>
+            <div class="panel-tools">
+              <button type="button" class="btn btn-ghost btn-sm" id="btn-refresh-history">刷新列表</button>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table class="history-table">
+              <thead>
+                <tr>
+                  <th>日期</th>
+                  <th class="col-num">应用数</th>
+                  <th class="col-num">监控总时长</th>
+                  <th class="col-action"><span class="sr-only">操作</span></th>
+                </tr>
+              </thead>
+              <tbody id="history-tbody"></tbody>
+            </table>
+            <div class="empty-state" id="history-empty" hidden>
+              <p class="empty-title">暂无历史数据</p>
+              <p class="empty-desc">程序每分钟自动保存一次，跨天后即可在这里回看</p>
+            </div>
+          </div>
+          <p class="panel-foot">
+            <span>点击“查看”把该日数据载入概览页，随时可以返回今天</span>
+          </p>
+        </div>
+      </section>
+
+      <!-- ---------- 设置 ---------- -->
+      <section class="view" id="view-settings" hidden>
+        <div class="settings-layout">
+          <nav class="settings-nav" id="settings-nav">
+            <button type="button" class="settings-nav-btn is-active" data-page="general">通用</button>
+            <button type="button" class="settings-nav-btn" data-page="account">账号与上传</button>
+            <button type="button" class="settings-nav-btn" data-page="blocked">进程屏蔽</button>
+          </nav>
+
+          <div class="settings-body">
+            <!-- 通用 -->
+            <div class="settings-page" id="page-general">
+              <h2 class="page-title">通用</h2>
+
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-name">开机自启动</span>
+                  <span class="setting-desc">登录 Windows 后自动在后台开始监控</span>
+                </div>
+                <div class="setting-control">
+                  <label class="switch">
+                    <input type="checkbox" id="toggle-auto-startup">
+                    <span class="switch-track"><span class="switch-thumb"></span></span>
+                  </label>
+                  <span class="setting-status" id="auto-startup-status">已关闭</span>
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-name">数据目录</span>
+                  <span class="setting-desc" id="data-dir-text">-</span>
+                </div>
+                <div class="setting-control">
+                  <button type="button" class="btn btn-ghost btn-sm" id="btn-open-dir">打开目录</button>
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-name">版本</span>
+                  <span class="setting-desc">pywebview 重构版 · 前端界面 + Python 采集内核</span>
+                </div>
+                <div class="setting-control">
+                  <span class="setting-status" id="app-version">-</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 账号与上传 -->
+            <div class="settings-page" id="page-account" hidden>
+              <h2 class="page-title">账号与上传</h2>
+              <p class="page-desc">登录后客户端每秒向服务器上传一次本机运行中的应用及使用时长。</p>
+
+              <form class="form" id="login-form" autocomplete="off">
+                <label class="field">
+                  <span class="field-label">服务器地址</span>
+                  <input type="text" id="input-server" placeholder="http://localhost:8080" spellcheck="false">
+                </label>
+                <label class="field">
+                  <span class="field-label">邮箱</span>
+                  <input type="email" id="input-email" placeholder="请输入登录邮箱" spellcheck="false">
+                </label>
+                <label class="field">
+                  <span class="field-label">密码</span>
+                  <input type="password" id="input-password" placeholder="请输入登录密码">
+                </label>
+
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary" id="btn-login">登录并开始上传</button>
+                  <button type="button" class="btn btn-ghost" id="btn-logout" disabled>退出登录</button>
+                </div>
+              </form>
+
+              <div class="status-card" id="account-status" data-stage="not_login">
+                <span class="status-title">当前状态</span>
+                <span class="status-text" id="account-status-text">未登录（登录后每秒自动上传数据）</span>
+              </div>
+
+              <p class="page-hint">
+                服务器地址需与后端保持一致，例如 http://localhost:8080。
+                手动登录成功后会加密保存密码，下次启动自动登录。
+              </p>
+            </div>
+
+            <!-- 进程屏蔽 -->
+            <div class="settings-page" id="page-blocked" hidden>
+              <h2 class="page-title">进程屏蔽</h2>
+              <p class="page-desc">
+                被屏蔽的进程不会显示在概览列表，也不会被上传到服务器；本地仍会继续统计，方便日后解除。
+              </p>
+
+              <div class="blocked-list" id="blocked-list"></div>
+
+              <div class="form-actions">
+                <button type="button" class="btn btn-ghost" id="btn-unblock" disabled>解除屏蔽</button>
+                <button type="button" class="btn btn-ghost" id="btn-refresh-blocked">刷新列表</button>
+              </div>
+
+              <p class="page-hint">在概览页右键任意进程，或在行尾点击“屏蔽”即可把进程加入此列表。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ==================== 右键菜单（菜单项由 js 动态生成） ==================== -->
+  <div class="context-menu" id="context-menu" hidden></div>
+
+  <!-- ==================== 退出确认 ==================== -->
+  <div class="modal-mask" id="exit-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="exit-title">
+      <h3 class="modal-title" id="exit-title">确认要退出吗？</h3>
+      <p class="modal-desc">退出后将停止采集与数据上传，当前数据会先保存到本地历史文件中。</p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="btn-exit-cancel">不用了</button>
+        <button type="button" class="btn btn-danger" id="btn-exit-confirm">退出程序</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 轻提示 ==================== -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

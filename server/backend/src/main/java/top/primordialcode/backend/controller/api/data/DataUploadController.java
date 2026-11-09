@@ -17,9 +17,12 @@ public class DataUploadController {
     DataUploadServer dataUploadServer;
 
     @PostMapping("/upload")
-    public Result upload(@RequestHeader String Authorization, @Valid @RequestBody DataUploadMainDTO data){
+    public Result upload(@Valid @RequestBody DataUploadMainDTO data){
         try {
-            dataUploadServer.receive(Authorization, data);
+            dataUploadServer.receive(data);
+        } catch (IllegalArgumentException e) {
+            log.warn("数据上传参数校验失败: {}", e.getMessage());
+            return Result.error(400, e.getMessage(), null);
         } catch (RuntimeException e) {
             // Redis 连接/序列化等异常统一在此捕获，记录日志后返回失败响应
             log.error("数据上传失败，Redis操作异常: {}", e.getMessage(), e);
@@ -29,7 +32,7 @@ public class DataUploadController {
         DataResponseVO responseVO = new DataResponseVO();
         responseVO.setReceived(true);
         responseVO.setTimestamp(data.getTimestamp());
-        
+
         return Result.success("数据上传成功", responseVO);
     }
 }

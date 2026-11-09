@@ -11,6 +11,7 @@ import top.primordialcode.backend.mapper.HistoryDataMapper;
 import top.primordialcode.backend.mapper.UserAuthMapper;
 import top.primordialcode.backend.service.Deregister.impl.DeregisterServerImpl;
 import top.primordialcode.backend.service.Redis.RedisStringServer;
+import top.primordialcode.backend.service.UploadCredential.UploadCredentialServer;
 import top.primordialcode.backend.utils.JwtTokenUtil;
 import top.primordialcode.backend.utils.JwtUtil;
 
@@ -39,6 +40,8 @@ public class DeregisterServer implements DeregisterServerImpl {
     RedisStringServer redisStringServer;
     @Autowired
     JwtTokenUtil jwtTokenUtil;
+    @Autowired
+    UploadCredentialServer uploadCredentialServer;
 
     /**
      * 注销当前账号(操作不可逆)
@@ -108,6 +111,16 @@ public class DeregisterServer implements DeregisterServerImpl {
             redisStringServer.deleteKeysByPattern("uploadDataDevice:*:" + user_email);
         } catch (Exception e) {
             log.warn("注销账号时清理Redis实时数据失败(忽略): user_email={}, error={}", user_email, e.getMessage());
+        }
+
+        // 6.5 清理该用户的上传凭证Redis缓存(使用用户的信息先行查询凭证再清除)
+        try {
+            UserAuthEntity profile = userAuthMapper.selectProfileByEmail(user_email);
+            if (profile != null && profile.getUpload_credential() != null) {
+                uploadCredentialServer.invalidateCache(profile.getUpload_credential());
+            }
+        } catch (Exception e) {
+            log.warn("注销账号时清理上传凭证Redis缓存失败(忽略): user_email={}, error={}", user_email, e.getMessage());
         }
 
         // 7. 将当前Token加入Redis黑名单，使其立即失效

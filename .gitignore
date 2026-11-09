@@ -17,6 +17,15 @@ client/translation/
 # python自己产生的缓存文件
 client/__pycache__/
 
+# WebView 版客户端（client_webview）
+client_webview/build/
+client_webview/dist/
+client_webview/__pycache__/
+client_webview/config/
+client_webview/history_data/
+client_webview/crash.log
+client_webview/preview/
+
 # 开发者随笔日记
 diary/
 
