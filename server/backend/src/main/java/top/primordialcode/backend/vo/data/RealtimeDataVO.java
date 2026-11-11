@@ -10,7 +10,7 @@ import java.util.List;
 /**
  * 实时数据返回VO
  */
-
+@Data
 public class RealtimeDataVO {
 
     /**
