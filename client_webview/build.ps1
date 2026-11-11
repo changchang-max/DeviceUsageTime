@@ -290,6 +290,19 @@ main.spec 已被 PyInstaller 默认模板覆盖（缺少：$($missingMarkers -jo
 
         Start-Sleep -Seconds 6
         if ($proc.HasExited) { Fail "exe 启动后立即退出（退出码 $($proc.ExitCode)），请手动运行查看报错" }
+
+        # onefile 启动失败时 PyInstaller 会弹一个标题为 Error 的对话框（例如
+        # “Could not create temporary directory!”），此时进程不会退出，需要单独识别
+        $proc.Refresh()
+        if ($proc.MainWindowTitle -eq 'Error') {
+            try { Stop-Process -Id $proc.Id -Force } catch {}
+            Fail @"
+exe 启动后弹出了 Error 对话框（多为 Could not create temporary directory!）。
+onefile 版本启动时需要先在 %TEMP% 下解包，若当前目录被安全策略限制（例如在受管控的工作区目录里运行），
+就会创建解包目录失败。处理办法：把 dist\DeviceUsageTime.exe 复制到普通目录（如桌面或 D:\Tools\）后再运行。
+"@
+        }
+
         Write-Host "进程存活 PID=$($proc.Id)，窗口应已显示（托盘图标可能出现）" -ForegroundColor Green
         Stop-Process -Id $proc.Id -Force
         Write-Host '已结束冒烟测试进程'
