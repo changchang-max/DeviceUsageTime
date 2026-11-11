@@ -20,9 +20,9 @@ const SORT_LABELS = {
   windowName_down: "名称 从高到低",
 };
 
-// 双击后浏览器仍会执行默认的选词行为，可能造成输入框瞬间失焦。
-// 在这段时间内忽略 blur 并重新聚焦，超过后再按正常“点击别处即提交”处理。
-const RENAME_BLUR_GUARD_MS = 350;
+// 当前正在行内编辑备注的行（同一时间只允许一个）。
+// 每秒轮询都会重排表格，编辑期间该行保持原位，避免被移出文档导致输入框失焦消失。
+let activeRename = null;
 
 /**
  * 初始化概览页事件绑定
@@ -162,7 +162,7 @@ function renderApps(apps) {
   const existing = new Map();
   Array.from(els.tbody.children).forEach((row) => existing.set(row.dataset.name, row));
 
-  const fragment = document.createDocumentFragment();
+  const ordered = [];
   let visible = 0;
 
   apps.forEach((app) => {
@@ -177,17 +177,46 @@ function renderApps(apps) {
       row = createRow(app.name);
     }
     updateRow(row, app, visible);
-    fragment.appendChild(row);
+    ordered.push(row);
   });
 
+  // 只移动位置不对的行；整表重新 append 会把节点移出文档，正在编辑的输入框会因此失焦
+  syncRows(ordered);
+
   // 剩下的都是本轮不显示的旧行，直接移除
-  existing.forEach((row) => row.remove());
-  els.tbody.appendChild(fragment);
+  existing.forEach((row) => {
+    // 该行正在编辑备注：先结束编辑，避免残留悬空的输入框与事件监听
+    if (activeRename && activeRename.row === row) activeRename.finish(false);
+    row.remove();
+  });
 
   els.empty.hidden = visible > 0;
   els.appCount.textContent = keyword
     ? `筛选 ${visible} / ${apps.length} 个应用`
     : `${apps.length} 个应用`;
+}
+
+/**
+ * 按目标顺序同步行节点，仅在位置不对时移动。
+ * 正在编辑备注的行不参与重排，保持原位以防被移出文档而失焦。
+ * @param {Array<HTMLTableRowElement>} ordered 目标顺序的行节点
+ */
+function syncRows(ordered) {
+  const lockedRow = activeRename?.row || null;
+  let cursor = els.tbody.firstElementChild;
+
+  ordered.forEach((row) => {
+    if (row === lockedRow) {
+      // 锁定行进位后继续，后续行插到它后面
+      if (cursor === row) cursor = row.nextElementSibling;
+      return;
+    }
+    if (row === cursor) {
+      cursor = cursor.nextElementSibling;
+      return;
+    }
+    els.tbody.insertBefore(row, cursor);
+  });
 }
 
 /**
@@ -280,14 +309,32 @@ function startRename(row, app) {
   });
   cell.appendChild(input);
 
-  // 记录打开时间：双击后浏览器的选词默认行为会短暂移走焦点，
-  // 这段时间内不认为是“用户点了别处”，重新聚焦即可。
-  const openedAt = Date.now();
-
   let finished = false;
+  // 编辑期间用户是否真的按下过鼠标/触摸屏。
+  // 表格每秒重排会让输入框被移出再插回文档并触发 blur，这类失焦不应关闭输入框；
+  // 只有“用户主动点了别处”才提交。每次点击后立刻复位，避免影响下一次判断。
+  let pointerDown = false;
+  let blurTimer = 0;
+
+  const onPointerDown = () => {
+    pointerDown = true;
+    setTimeout(() => {
+      pointerDown = false;
+    }, 0);
+  };
+
+  /**
+   * 结束编辑
+   * @param {boolean} commit 是否提交输入内容
+   */
   const finish = async (commit) => {
     if (finished) return;
     finished = true;
+
+    document.removeEventListener("mousedown", onPointerDown, true);
+    document.removeEventListener("touchstart", onPointerDown, true);
+    clearTimeout(blurTimer);
+    if (activeRename && activeRename.row === row) activeRename = null;
 
     const value = input.value.trim();
     input.remove();
@@ -307,6 +354,11 @@ function startRename(row, app) {
     }
   };
 
+  activeRename = { row, finish };
+
+  document.addEventListener("mousedown", onPointerDown, true);
+  document.addEventListener("touchstart", onPointerDown, true);
+
   // 延迟一帧再聚焦，等 dblclick 的默认行为（选词）执行完
   setTimeout(() => {
     if (finished) return;
@@ -321,19 +373,27 @@ function startRename(row, app) {
     } else if (event.key === "Escape") {
       event.preventDefault();
       finish(false);
+    } else if (event.key === "Tab") {
+      // 用 Tab 离开时按“点了别处”处理，提交后保留浏览器的焦点跳转
+      finish(true);
     }
   });
 
-  input.addEventListener('blur', () => {
+  input.addEventListener("blur", () => {
     if (finished) return;
-    if (Date.now() - openedAt < RENAME_BLUR_GUARD_MS) {
-      // 双击选词导致的瞬时失焦：抢回焦点，不提交
-      setTimeout(() => {
-        if (!finished) input.focus();
-      }, 0);
-      return;
-    }
-    finish(true);
+    // 同步记录这次失焦是否由用户点击别处引起：文档级 mousedown 先于默认的焦点转移执行
+    const clickedElsewhere = pointerDown;
+    // 延后一帧判断：若是 DOM 重排把输入框移出再插回导致的失焦，
+    // 此时输入框仍在文档中且用户没有点别处，重新聚焦即可，绝不能关闭编辑框。
+    clearTimeout(blurTimer);
+    blurTimer = setTimeout(() => {
+      if (finished) return;
+      if (input.isConnected && !clickedElsewhere) {
+        input.focus();
+        return;
+      }
+      finish(true);
+    }, 0);
   });
 }
 
