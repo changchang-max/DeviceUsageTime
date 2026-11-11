@@ -65,7 +65,15 @@ jobs:
           path: client_webview/dist/DeviceUsageTime.exe
           if-no-files-found: error
 
-      # Step 7：发布到 GitHub Release（nightly 标签，每次推送自动更新）
+      # Step 7：把 nightly 标签强制指向本次构建的提交
+      # 说明：ncipollo/release-action 的 allowUpdates 只更新 Release 本体与 assets，
+      # 不会移动已存在的 tag，所以这里先自己把 tag 重指到当前提交，再交给 action 发布。
+      - name: Point nightly tag to current commit
+        run: |
+          git tag -f nightly ${{ github.sha }}
+          git push -f origin refs/tags/nightly
+
+      # Step 8：发布到 GitHub Release（nightly 标签，每次推送自动更新）
       - name: Upload to GitHub Release
         uses: ncipollo/release-action@v1
         with:
