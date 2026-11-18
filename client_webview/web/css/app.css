@@ -1,37 +1,42 @@
-/* ============================================================
+﻿/* ============================================================
    屏幕视奸器 · WebView 客户端样式
-   设计基调：浅色 + 蓝色主色（对应旧版 light_blue_500 主题），
+   设计基调：「暖木」低饱和阅读版 — 米白/麻纸底 + 墨绿主色，
+   弱化冷调蓝，降低长时间盯屏的视觉疲劳；
    卡片式布局、圆角、轻投影，所有尺寸适配 920×700 默认窗口。
    ============================================================ */
 
 :root {
-  --bg: #eef2f9;
-  --surface: #ffffff;
-  --surface-soft: #f6f8fc;
-  --text: #1b2437;
-  --text-soft: #5b6b85;
-  --muted: #8b9bb4;
-  --line: #e4e9f2;
-  --line-strong: #d3dcea;
+  /* 底色与表面：米白到麻纸的暖灰过渡 */
+  --bg: #f4f1ea;
+  --surface: #fffdf8;
+  --surface-soft: #f6f2ea;
+  --text: #2f2a24;
+  --text-soft: #6b6156;
+  --muted: #9a8f82;
+  --line: #e8e1d6;
+  --line-strong: #dbd2c4;
 
-  --accent: #2196f3;
-  --accent-dark: #1273c4;
-  --accent-soft: #e7f2ff;
+  /* 主色：墨绿，替代原冷调蓝 */
+  --accent: #2f7a5f;
+  --accent-dark: #245f49;
+  --accent-soft: #e4f0ea;
 
-  --ok: #1f9d6b;
-  --ok-soft: #e6f7ef;
-  --warn: #d9880f;
-  --warn-soft: #fdf3e2;
-  --danger: #e14b52;
-  --danger-soft: #fdebeb;
+  /* 语义色同步压低饱和度，避免与暖底打架 */
+  --ok: #3f8f5f;
+  --ok-soft: #e8f3ea;
+  --warn: #b8842f;
+  --warn-soft: #f8efdf;
+  --danger: #b4564b;
+  --danger-soft: #f8e8e5;
 
-  --radius-lg: 16px;
-  --radius: 12px;
-  --radius-sm: 9px;
+  --radius-lg: 14px;
+  --radius: 11px;
+  --radius-sm: 8px;
 
-  --shadow-sm: 0 1px 2px rgba(23, 43, 77, 0.06);
-  --shadow: 0 10px 30px rgba(23, 43, 77, 0.08);
-  --shadow-lg: 0 24px 60px rgba(23, 43, 77, 0.18);
+  /* 投影由冷灰阴影改为暖褐阴影，贴合纸感 */
+  --shadow-sm: 0 1px 2px rgba(90, 72, 50, 0.07);
+  --shadow: 0 10px 26px rgba(90, 72, 50, 0.09);
+  --shadow-lg: 0 24px 60px rgba(90, 72, 50, 0.18);
 
   --font: "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, -apple-system, sans-serif;
   --mono: "Cascadia Mono", "Consolas", "SFMono-Regular", ui-monospace, monospace;
@@ -51,7 +56,7 @@ body {
   font-family: var(--font);
   font-size: 14px;
   color: var(--text);
-  background: radial-gradient(1200px 600px at 15% -10%, #ffffff 0%, var(--bg) 45%, #e8eef8 100%);
+  background: linear-gradient(180deg, #faf7f1 0%, #f4f1ea 55%, #efeae1 100%);
   overflow: hidden;
   user-select: none;
   -webkit-font-smoothing: antialiased;
@@ -186,7 +191,7 @@ button {
 
 .status-pill[data-stage="error"] {
   color: var(--danger);
-  border-color: rgba(225, 75, 82, 0.28);
+  border-color: rgba(180, 86, 75, 0.28);
   background: var(--danger-soft);
 }
 
@@ -248,7 +253,7 @@ button {
   border-radius: var(--radius);
   background: var(--warn-soft);
   border: 1px solid rgba(217, 136, 15, 0.28);
-  color: #8a5a08;
+  color: #7d5718;
   font-size: 13px;
   flex: none;
 }
@@ -298,7 +303,7 @@ button {
   width: 120px;
   height: 120px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(33, 150, 243, 0.1), transparent 70%);
+  background: radial-gradient(circle, rgba(47, 122, 95, 0.1), transparent 70%);
 }
 
 .stat-label {
@@ -335,9 +340,9 @@ button {
 }
 
 .stat-card-accent {
-  background: linear-gradient(135deg, #2c9bf5, #1273c4);
+  background: linear-gradient(135deg, #3d8f70, #245f49);
   border-color: transparent;
-  box-shadow: 0 10px 24px rgba(18, 115, 196, 0.28);
+  box-shadow: 0 10px 24px rgba(36, 95, 73, 0.24);
 }
 
 .stat-card-accent .stat-label,
@@ -434,7 +439,7 @@ button {
 .search-box input:focus {
   border-color: var(--accent);
   background: var(--surface);
-  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.14);
+  box-shadow: 0 0 0 3px rgba(47, 122, 95, 0.14);
 }
 
 .search-box input::-webkit-search-cancel-button {
@@ -484,7 +489,7 @@ button {
 .dropdown.is-open .dropdown-trigger {
   border-color: var(--accent);
   background: var(--surface);
-  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.14);
+  box-shadow: 0 0 0 3px rgba(47, 122, 95, 0.14);
 }
 
 .dropdown-caret {
@@ -621,7 +626,7 @@ thead th {
 }
 
 .app-table tbody tr:hover {
-  background: #f3f8ff;
+  background: #f4f0e6;
 }
 
 .app-table tbody tr.is-active {
@@ -679,12 +684,12 @@ thead th {
   padding: 0 8px;
   border-radius: 8px;
   border: 1px solid var(--accent);
-  background: #fff;
+  background: var(--surface);
   font-size: 13.5px;
   font-family: inherit;
   color: var(--text);
   outline: none;
-  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.14);
+  box-shadow: 0 0 0 3px rgba(47, 122, 95, 0.14);
 }
 
 .time-text {
@@ -718,7 +723,7 @@ thead th {
 }
 
 .row-btn:hover {
-  border-color: rgba(225, 75, 82, 0.4);
+  border-color: rgba(180, 86, 75, 0.4);
   background: var(--danger-soft);
   color: var(--danger);
 }
@@ -737,7 +742,7 @@ thead th {
 }
 
 .history-table tbody tr:hover {
-  background: #f3f8ff;
+  background: #f4f0e6;
 }
 
 .history-table .col-num {
@@ -822,13 +827,13 @@ thead th {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #35a4f8, var(--accent-dark));
+  background: linear-gradient(135deg, #3d8f70, #245f49);
   color: #fff;
-  box-shadow: 0 8px 18px rgba(18, 115, 196, 0.26);
+  box-shadow: 0 8px 18px rgba(36, 95, 73, 0.22);
 }
 
 .btn-primary:hover:not(:disabled) {
-  box-shadow: 0 10px 22px rgba(18, 115, 196, 0.34);
+  box-shadow: 0 10px 22px rgba(36, 95, 73, 0.3);
 }
 
 .btn-ghost {
@@ -844,13 +849,13 @@ thead th {
 }
 
 .btn-danger {
-  background: linear-gradient(135deg, #f0686d, var(--danger));
+  background: linear-gradient(135deg, #c47064, var(--danger));
   color: #fff;
-  box-shadow: 0 8px 18px rgba(225, 75, 82, 0.26);
+  box-shadow: 0 8px 18px rgba(180, 86, 75, 0.24);
 }
 
 .btn-danger:hover:not(:disabled) {
-  box-shadow: 0 10px 22px rgba(225, 75, 82, 0.34);
+  box-shadow: 0 10px 22px rgba(180, 86, 75, 0.32);
 }
 
 /* ==================== 设置 ==================== */
@@ -997,7 +1002,7 @@ thead th {
   width: 44px;
   height: 24px;
   border-radius: 999px;
-  background: #d7dfec;
+  background: #e0d8ca;
   transition: background 0.18s ease;
 }
 
@@ -1009,7 +1014,7 @@ thead th {
   height: 18px;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 1px 3px rgba(23, 43, 77, 0.28);
+  box-shadow: 0 1px 3px rgba(90, 72, 50, 0.3);
   transition: transform 0.18s ease;
 }
 
@@ -1022,7 +1027,7 @@ thead th {
 }
 
 .switch input:focus-visible + .switch-track {
-  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.22);
+  box-shadow: 0 0 0 3px rgba(47, 122, 95, 0.2);
 }
 
 /* 表单 */
@@ -1059,13 +1064,13 @@ thead th {
 }
 
 .field input::placeholder {
-  color: #a9b6ca;
+  color: #b3a897;
 }
 
 .field input:focus {
   border-color: var(--accent);
   background: var(--surface);
-  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.14);
+  box-shadow: 0 0 0 3px rgba(47, 122, 95, 0.14);
 }
 
 .form-actions {
@@ -1109,16 +1114,16 @@ thead th {
 }
 
 .status-card[data-stage="ok"] .status-text {
-  color: #146b4a;
+  color: #26694a;
 }
 
 .status-card[data-stage="error"] {
-  border-color: rgba(225, 75, 82, 0.3);
+  border-color: rgba(180, 86, 75, 0.3);
   background: var(--danger-soft);
 }
 
 .status-card[data-stage="error"] .status-text {
-  color: #a52f35;
+  color: #8e3d35;
 }
 
 .status-card[data-stage="invalid"] {
@@ -1127,7 +1132,7 @@ thead th {
 }
 
 .status-card[data-stage="invalid"] .status-text {
-  color: #8a5a08;
+  color: #7d5718;
 }
 
 /* 屏蔽列表 */
@@ -1162,7 +1167,7 @@ thead th {
 .blocked-item.is-selected {
   border-color: var(--accent);
   background: var(--accent-soft);
-  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.14);
+  box-shadow: 0 0 0 2px rgba(47, 122, 95, 0.14);
 }
 
 .blocked-name {
@@ -1296,7 +1301,7 @@ thead th {
   font-size: 13px;
   font-weight: 600;
   color: #fff;
-  background: rgba(27, 36, 55, 0.92);
+  background: rgba(58, 48, 38, 0.94);
   box-shadow: var(--shadow);
   animation: toast-in 0.18s ease;
   white-space: nowrap;
@@ -1310,7 +1315,7 @@ thead th {
 }
 
 .toast[data-type="error"] {
-  background: rgba(225, 75, 82, 0.95);
+  background: rgba(180, 86, 75, 0.95);
 }
 
 .toast[data-type="warn"] {
@@ -1373,14 +1378,14 @@ thead th {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c8d4e6;
+  background: #d8cfc0;
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #aabbd4;
+  background: #c4b8a5;
   background-clip: content-box;
 }
 
