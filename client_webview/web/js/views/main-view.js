@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 概览页视图：统计卡片 + 应用使用时长表格。
  *
  * 渲染策略：以进程名为 key 复用 <tr> 节点，只更新变化的文本，
@@ -56,6 +56,9 @@ export function initMainView({ refresh }) {
     toggleSortMenu();
   });
 
+  // 菜单 fixed 到 body，窗口尺寸变化时先收起，避免位置漂移
+  window.addEventListener("resize", closeSortMenu);
+
   // 选择排序方式后写回配置并立即刷新
   els.sortMenu.addEventListener("click", async (event) => {
     const item = event.target.closest(".dropdown-item");
@@ -77,7 +80,7 @@ export function initMainView({ refresh }) {
 
   // 点击其它区域 / Esc 收起排序菜单
   document.addEventListener("click", (event) => {
-    if (!els.dropdown.contains(event.target)) closeSortMenu();
+    if (!els.dropdown.contains(event.target) && !els.sortMenu.contains(event.target)) closeSortMenu();
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeSortMenu();
@@ -96,17 +99,35 @@ export function initMainView({ refresh }) {
       { label: "⛔ 屏蔽此进程", danger: true, onClick: () => blockApp(app) },
     ]);
   });
+
+  // 窄窗口下操作提示折叠成按钮，点一下展开
+  const footToggle = $("#btn-toggle-foot");
+  const foot = footToggle?.closest(".panel-foot");
+  footToggle?.addEventListener("click", () => {
+    const open = foot.classList.toggle("is-open");
+    footToggle.setAttribute("aria-expanded", open ? "true" : "false");
+  });
 }
 
 /** 展开/收起排序菜单 */
 function toggleSortMenu() {
   if (els.dropdown.classList.contains("is-open")) {
     closeSortMenu();
-  } else {
-    els.dropdown.classList.add("is-open");
-    els.sortMenu.hidden = false;
-    els.sortTrigger.setAttribute("aria-expanded", "true");
+    return;
   }
+
+  els.dropdown.classList.add("is-open");
+  els.sortMenu.hidden = false;
+  els.sortTrigger.setAttribute("aria-expanded", "true");
+
+  // 面板 overflow:hidden 会裁掉绝对定位的子菜单，因此菜单挂在 body 上，
+  // 展开时按触发按钮的实际位置右对齐摆放
+  if (els.sortMenu.parentElement !== document.body) document.body.appendChild(els.sortMenu);
+  const rect = els.sortTrigger.getBoundingClientRect();
+  const margin = 8;
+  els.sortMenu.style.right = `${Math.max(margin, window.innerWidth - rect.right)}px`;
+  els.sortMenu.style.left = "auto";
+  els.sortMenu.style.top = `${rect.bottom + 6}px`;
 }
 
 /** 收起排序菜单 */
@@ -236,7 +257,12 @@ function createRow(name) {
         <span class="name-badge badge-live" hidden>前台</span>
       </div>
     </td>
-    <td class="col-time"><span class="time-text"></span></td>
+    <td class="col-time">
+      <div class="time-cell">
+        <span class="time-fill"><i></i></span>
+        <span class="time-text"></span>
+      </div>
+    </td>
     <td class="col-action"><button type="button" class="row-btn" title="屏蔽该进程">屏蔽</button></td>
   `;
 
@@ -270,6 +296,14 @@ function updateRow(row, app, index) {
   nameEl.title = `${app.name}（双击可改备注名）`;
   nameEl.classList.toggle("is-alias", Boolean(app.alias));
   row.querySelector(".time-text").textContent = app.text;
+
+  // 相对最大值的比例条：只反映“和第一名比占多少”，不做二次统计
+  const maxSeconds = Number(state.snapshot?.maxSeconds) || 0;
+  const ratio = maxSeconds > 0 ? Math.min(1, Number(app.seconds || 0) / maxSeconds) : 0;
+  const fill = row.querySelector(".time-fill");
+  fill.hidden = ratio <= 0;
+  fill.firstElementChild.style.width = `${Math.round(ratio * 100)}%`;
+  row.title = `${app.display} · ${app.text}`;
 
   const aliasBadge = row.querySelector(".badge-alias");
   const liveBadge = row.querySelector(".badge-live");

@@ -9,6 +9,7 @@ import { api, initBridge } from "./api.js";
 import { state } from "./state.js";
 import { $, $$ } from "./util.js";
 import { showToast } from "./ui.js";
+import { initTheme } from "./theme.js";
 import { initMainView, renderMain } from "./views/main-view.js";
 import {
   initSettingsView,
@@ -184,6 +185,10 @@ function setView(view, sub = "") {
   }
   if (view === "history") renderHistory();
   if (view === "main") refreshSnapshot();
+
+  // 切页后让内容区回到顶部，历史模式下残留的滚动位置不会带到新页面
+  const content = document.querySelector(".content");
+  if (content) content.scrollTop = 0;
 }
 
 /**
@@ -274,6 +279,9 @@ function bindExitModal() {
  */
 async function bootstrap() {
   bindExitModal();
+
+  // 主题要在首屏渲染前就位，避免先闪一下默认配色
+  initTheme();
 
   initMainView({ refresh: refreshSnapshot });
   initSettingsView({ refresh: refreshSnapshot });

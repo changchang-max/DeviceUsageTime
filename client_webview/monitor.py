@@ -633,6 +633,8 @@ class MonitorService:
             "viewDate": self._file_to_date(history_file) if mode == "history" else self.current_date,
             "apps": items,
             "appCount": len(items),
+            # 概览页时长占比条的分母：当前列表里最长的那个应用
+            "maxSeconds": max((item["seconds"] for item in items), default=0),
             "blockedCount": len(blocked_set),
             "sortType": sort_type,
             "stats": {

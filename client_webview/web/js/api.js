@@ -146,6 +146,8 @@ function mockSnapshot() {
     appCount: items.length,
     blockedCount: mockState.blocked.size,
     sortType,
+    // 概览页用来画时长占比条（与 Python 端 snapshot.maxSeconds 对齐）
+    maxSeconds: items.reduce((max, item) => Math.max(max, item.seconds || 0), 0),
     stats: {
       keyboardCount: mockState.stats.keyboardCount,
       mouseClickCount: mockState.stats.mouseClickCount,

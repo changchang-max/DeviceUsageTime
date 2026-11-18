@@ -1,0 +1,364 @@
+/* ============================================================
+   屏幕视奸器 · WebView 客户端样式 · 主题层
+   每个主题只覆盖设计令牌，组件规则见 app.css。
+   往这里加主题 = 加一段 [data-theme="xxx"]，不用碰任何组件样式。
+   字体族写在 app.css 的 :root 上，主题不覆盖字体。
+   ============================================================ */
+
+:root,
+[data-theme="paper"] {
+  /* 暖木（默认）：中性暖灰底 + 墨绿主色，长时间盯屏不刺眼；
+     刻意避开米黄/奶油色，靠低彩度而不是暖黄来降疲劳 */
+  --bg: #eceef0;
+  --bg-gradient: radial-gradient(1200px 620px at -10% -20%, #f6f7f8, transparent 62%),
+    linear-gradient(180deg, #eff1f3 0%, #e8ebed 100%);
+  --surface: #fbfcfc;
+  --surface-soft: #eff2f3;
+  --surface-sunken: #e1e5e7;
+
+  --text: #22282b;
+  --text-soft: #4d565a;
+  --muted: #5e686d;
+  --faint: #586266;
+  --line: #dde2e4;
+  --line-strong: #c7ced1;
+
+  --accent: #2f7a5f;
+  --accent-hover: #276651;
+  --accent-dark: #1f5540;
+  --accent-soft: #dfeee6;
+  --accent-ink: #ffffff;
+  --accent-glow: rgba(47, 122, 95, 0.18);
+
+  --ok: #256846;
+  --ok-soft: #e2f1e6;
+  --warn: #8a6218;
+  --warn-soft: #f7ecd7;
+  --danger: #a34b40;
+  --danger-soft: #f7e6e2;
+
+  --hero-from: #35875f;
+  --hero-to: #1d5240;
+  --hero-text: #ffffff;
+  --hero-muted: rgba(255, 255, 255, 0.88);
+  /* 强调卡片上的按钮：白底 + 主色字，和卡片的绿底形成反相，比白字更清楚 */
+  --hero-btn-bg: #ffffff;
+  --hero-btn-text: #1b4b39;
+
+  --shadow-sm: 0 1px 2px rgba(87, 66, 41, 0.08);
+  --shadow-md: 0 10px 24px -14px rgba(87, 66, 41, 0.42);
+  --shadow-lg: 0 30px 60px -24px rgba(64, 48, 28, 0.42);
+}
+
+[data-theme="slate"] {
+  /* 岩墨：中性冷灰底 + 墨绿主色，适合白日强光/多屏常驻窗口 */
+  --bg: #e6e8e7;
+  --bg-gradient: radial-gradient(1100px 600px at -10% -20%, #f6f7f6, transparent 60%),
+    linear-gradient(180deg, #eceeec 0%, #e3e5e4 100%);
+  --surface: #fbfcfb;
+  --surface-soft: #eff1f0;
+  --surface-sunken: #e2e5e3;
+
+  --text: #1e2422;
+  --text-soft: #4b5551;
+  --muted: #5b6762;
+  --faint: #5c6763;
+  --line: #d8dcda;
+  --line-strong: #c3cac7;
+
+  --accent: #2b6f59;
+  --accent-hover: #245d4a;
+  --accent-dark: #1b4c3c;
+  --accent-soft: #dbeae4;
+  --accent-ink: #ffffff;
+  --accent-glow: rgba(43, 111, 89, 0.18);
+
+  --ok: #25734c;
+  --ok-soft: #ddece2;
+  --warn: #7c5a17;
+  --warn-soft: #f2eada;
+  --danger: #9b463b;
+  --danger-soft: #f3e4e1;
+
+  --hero-from: #2f7560;
+  --hero-to: #17493a;
+  --hero-text: #ffffff;
+  --hero-muted: rgba(255, 255, 255, 0.88);
+  --hero-btn-bg: #ffffff;
+  --hero-btn-text: #17493a;
+
+  --shadow-sm: 0 1px 2px rgba(28, 40, 36, 0.08);
+  --shadow-md: 0 10px 24px -14px rgba(28, 40, 36, 0.34);
+  --shadow-lg: 0 30px 60px -24px rgba(24, 34, 31, 0.36);
+}
+
+[data-theme="night"] {
+  /* 夜阑：深墨底 + 薄荷主色，夜间使用、后台常驻时不炸眼 */
+  --bg: #14181a;
+  --bg-gradient: radial-gradient(1100px 600px at -10% -20%, #1d2427, transparent 62%),
+    linear-gradient(180deg, #161b1d 0%, #111516 100%);
+  --surface: #1a2022;
+  --surface-soft: #212829;
+  --surface-sunken: #0f1314;
+
+  --text: #e9efec;
+  --text-soft: #b8c4c0;
+  --muted: #93a09b;
+  --faint: #8b9892;
+  --line: #2a3234;
+  --line-strong: #3a4446;
+
+  --accent: #4ec49a;
+  --accent-hover: #6ad3ac;
+  --accent-dark: #8ee6c4;
+  --accent-soft: #1e3a31;
+  --accent-ink: #0d2620;
+  --accent-glow: rgba(78, 196, 154, 0.24);
+
+  --ok: #5cc98f;
+  --ok-soft: #1a3327;
+  --warn: #d4a555;
+  --warn-soft: #33291a;
+  --danger: #e08073;
+  --danger-soft: #381f1d;
+
+  --hero-from: #2f8f6d;
+  --hero-to: #17453a;
+  --hero-text: #f2fffa;
+  --hero-muted: rgba(234, 255, 247, 0.84);
+  --hero-btn-bg: #f2fffa;
+  --hero-btn-text: #123a30;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 12px 26px -16px rgba(0, 0, 0, 0.7);
+  --shadow-lg: 0 30px 60px -24px rgba(0, 0, 0, 0.75);
+}
+
+[data-theme="aurora"] {
+  /* 极光：墨石墨底 + 青蓝主色，冷调但保留暖灰中性的克制 */
+  --bg: #12161c;
+  --bg-gradient: radial-gradient(1100px 620px at -8% -18%, #1b2430, transparent 60%),
+    linear-gradient(180deg, #141a21 0%, #0f1419 100%);
+  --surface: #181f27;
+  --surface-soft: #1f2831;
+  --surface-sunken: #0c1015;
+
+  --text: #e8eef5;
+  --text-soft: #b3bfcc;
+  --muted: #8e9caa;
+  --faint: #8b98a6;
+  --line: #27313b;
+  --line-strong: #37434f;
+
+  --accent: #58b6f0;
+  --accent-hover: #7cc8f6;
+  --accent-dark: #a4dbfb;
+  --accent-soft: #17303f;
+  --accent-ink: #06171f;
+  --accent-glow: rgba(88, 182, 240, 0.24);
+
+  --ok: #55c8a3;
+  --ok-soft: #153329;
+  --warn: #d9b062;
+  --warn-soft: #322a1a;
+  --danger: #e6857a;
+  --danger-soft: #371f1c;
+
+  --hero-from: #2b6f9c;
+  --hero-to: #153c56;
+  --hero-text: #f0f9ff;
+  --hero-muted: rgba(233, 246, 255, 0.84);
+  --hero-btn-bg: #f0f9ff;
+  --hero-btn-text: #10334a;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.42);
+  --shadow-md: 0 12px 26px -16px rgba(0, 0, 0, 0.72);
+  --shadow-lg: 0 30px 60px -24px rgba(0, 0, 0, 0.78);
+}
+
+[data-theme="grape"] {
+  /* 紫藤：墨紫底 + 藤灰主色，与绿色语义色拉开距离，长时间看不打架 */
+  --bg: #17141c;
+  --bg-gradient: radial-gradient(1100px 620px at -8% -18%, #231d2d, transparent 60%),
+    linear-gradient(180deg, #1a161f 0%, #131017 100%);
+  --surface: #1e1a24;
+  --surface-soft: #26212e;
+  --surface-sunken: #100d14;
+
+  --text: #efeaf6;
+  --text-soft: #c0b7cf;
+  --muted: #9a91a9;
+  --faint: #918899;
+  --line: #2c2635;
+  --line-strong: #3d3548;
+
+  --accent: #b18cf2;
+  --accent-hover: #c2a3f6;
+  --accent-dark: #d6c0fb;
+  --accent-soft: #2c2340;
+  --accent-ink: #170f24;
+  --accent-glow: rgba(177, 140, 242, 0.24);
+
+  --ok: #5ec9a0;
+  --ok-soft: #153128;
+  --warn: #dbb067;
+  --warn-soft: #322a1a;
+  --danger: #e88d84;
+  --danger-soft: #371f1e;
+
+  --hero-from: #6c4fb3;
+  --hero-to: #3a2870;
+  --hero-text: #faf7ff;
+  --hero-muted: rgba(246, 240, 255, 0.86);
+  --hero-btn-bg: #faf7ff;
+  --hero-btn-text: #33235f;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.42);
+  --shadow-md: 0 12px 26px -16px rgba(0, 0, 0, 0.72);
+  --shadow-lg: 0 30px 60px -24px rgba(0, 0, 0, 0.78);
+}
+
+[data-theme="indigo"] {
+  /* 靛蓝：深藏青底 + 琥珀强调色，比薄荷/青蓝更暖的夜间方案 */
+  --bg: #12161f;
+  --bg-gradient: radial-gradient(1100px 620px at -8% -18%, #1b2233, transparent 60%),
+    linear-gradient(180deg, #141924 0%, #0f131b 100%);
+  --surface: #181e2a;
+  --surface-soft: #1f2635;
+  --surface-sunken: #0c1017;
+
+  --text: #e9edf6;
+  --text-soft: #b5bdd0;
+  --muted: #8f98ad;
+  --faint: #8b95ad;
+  --line: #262e3f;
+  --line-strong: #354055;
+
+  --accent: #f0b354;
+  --accent-hover: #f6c476;
+  --accent-dark: #ffd9a0;
+  --accent-soft: #33291a;
+  --accent-ink: #1c1206;
+  --accent-glow: rgba(240, 179, 84, 0.22);
+
+  --ok: #57c7a0;
+  --ok-soft: #153027;
+  --warn: #e2b566;
+  --warn-soft: #332a1a;
+  --danger: #e88b80;
+  --danger-soft: #36201d;
+
+  --hero-from: #c9913c;
+  --hero-to: #6e4a15;
+  --hero-text: #fff8ec;
+  --hero-muted: rgba(255, 247, 232, 0.86);
+  --hero-btn-bg: #fff8ec;
+  --hero-btn-text: #4c3109;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.42);
+  --shadow-md: 0 12px 26px -16px rgba(0, 0, 0, 0.72);
+  --shadow-lg: 0 30px 60px -24px rgba(0, 0, 0, 0.78);
+}
+
+[data-theme="mint"] {
+  /* 青瓷：浅灰绿底 + 深青主色，比米白更清透的白天方案 */
+  --bg: #eaf0ed;
+  --bg-gradient: radial-gradient(1100px 600px at -10% -20%, #f8fbfa, transparent 60%),
+    linear-gradient(180deg, #f0f5f3 0%, #e6ecea 100%);
+  --surface: #ffffff;
+  --surface-soft: #eef3f1;
+  --surface-sunken: #e0e7e4;
+
+  --text: #1b2523;
+  --text-soft: #46534f;
+  --muted: #5f6f69;
+  --faint: #5b6a65;
+  --line: #d4dcd9;
+  --line-strong: #bfcac6;
+
+  --accent: #1f6f60;
+  --accent-hover: #195c4f;
+  --accent-dark: #14493f;
+  --accent-soft: #d6e9e3;
+  --accent-ink: #ffffff;
+  --accent-glow: rgba(31, 111, 96, 0.18);
+
+  --ok: #1a6645;
+  --ok-soft: #dcefe4;
+  --warn: #7e5c16;
+  --warn-soft: #f4ebd8;
+  --danger: #9d473d;
+  --danger-soft: #f5e5e2;
+
+  --hero-from: #26806d;
+  --hero-to: #14493f;
+  --hero-text: #ffffff;
+  --hero-muted: rgba(255, 255, 255, 0.88);
+  --hero-btn-bg: #ffffff;
+  --hero-btn-text: #10453a;
+
+  --shadow-sm: 0 1px 2px rgba(20, 48, 42, 0.07);
+  --shadow-md: 0 10px 24px -14px rgba(20, 48, 42, 0.3);
+  --shadow-lg: 0 30px 60px -24px rgba(20, 48, 42, 0.34);
+}
+
+[data-theme="grid"] {
+  /* 工程纸：冷白底 + 方格纸纹理 + 技术蓝主色，测量型界面 */
+  --bg: #f1f4f7;
+  --bg-gradient: linear-gradient(rgba(37, 64, 92, 0.05) 1px, transparent 1px) 0 0 / 24px 24px,
+    linear-gradient(90deg, rgba(37, 64, 92, 0.05) 1px, transparent 1px) 0 0 / 24px 24px,
+    linear-gradient(180deg, #f6f8fa 0%, #eef2f6 100%);
+  --surface: #ffffff;
+  --surface-soft: #f2f6f9;
+  --surface-sunken: #e6ecf2;
+
+  --text: #16212c;
+  --text-soft: #445565;
+  --muted: #5d6f80;
+  --faint: #5a6b7b;
+  --line: #d5dee6;
+  --line-strong: #bfcbd6;
+
+  --accent: #1f5f8b;
+  --accent-hover: #194e73;
+  --accent-dark: #143d5b;
+  --accent-soft: #dceaf5;
+  --accent-ink: #ffffff;
+  --accent-glow: rgba(31, 95, 139, 0.18);
+
+  --ok: #196647;
+  --ok-soft: #dcefe6;
+  --warn: #7d5c17;
+  --warn-soft: #f4ebd7;
+  --danger: #9c463b;
+  --danger-soft: #f5e5e1;
+
+  --hero-from: #276c9c;
+  --hero-to: #143d5b;
+  --hero-text: #ffffff;
+  --hero-muted: rgba(255, 255, 255, 0.88);
+  --hero-btn-bg: #ffffff;
+  --hero-btn-text: #0f3550;
+
+  --shadow-sm: 0 1px 2px rgba(22, 33, 44, 0.08);
+  --shadow-md: 0 10px 24px -14px rgba(22, 33, 44, 0.3);
+  --shadow-lg: 0 30px 60px -24px rgba(22, 33, 44, 0.36);
+}
+
+/* 主题选择项（顶栏菜单 + 设置页网格）用固定的中性标签色：
+   它们是一份“主题货架”，条目颜色不能跟着当前主题走，否则深色主题下浅色条目的文字会消失 */
+[data-theme] .theme-menu,
+[data-theme] [data-picker-neutral="1"] {
+  --text: #23292c;
+  --text-soft: #45504f;
+  --muted: #5e686d;
+  --faint: #6b7478;
+  --line: #dcdfe2;
+  --line-strong: #c6cbcf;
+  --surface: #ffffff;
+  --surface-soft: #eff2f3;
+  --surface-sunken: #e1e5e7;
+  --accent: #2f7a5f;
+  --accent-dark: #1f5540;
+  --accent-soft: #e2efe9;
+}

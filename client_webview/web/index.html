@@ -1,10 +1,27 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="paper">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
   <title>屏幕视奸器</title>
   <link rel="icon" href="assets/icon.ico">
+  <!-- 先套用已保存的主题，再渲染首屏，避免白天主题一闪而过 -->
+  <script>
+    (function () {
+      var theme = "paper";
+      try {
+        theme = localStorage.getItem("dut.theme") || "paper";
+      } catch (error) {
+        // 存储被禁用时用默认主题
+      }
+      document.documentElement.dataset.theme = theme;
+      // 深色主题在窗口创建前就告诉 WebView：滚动条、表单控件、默认底色一起变深
+      var dark = theme === "night" || theme === "aurora" || theme === "grape" || theme === "indigo";
+      document.documentElement.style.colorScheme = dark ? "dark" : "light";
+    })();
+  </script>
+  <link rel="stylesheet" href="css/theme.css">
   <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
@@ -20,16 +37,25 @@
       </div>
 
       <div class="topbar-right">
-        <span class="status-pill" id="upload-pill" data-stage="not_login" title="数据上传状态">
-          <i class="pill-dot"></i>
-          <span class="pill-text">未登录</span>
-        </span>
-        <nav class="view-nav" id="view-nav">
-          <button type="button" class="nav-btn is-active" data-view="main">概览</button>
-          <button type="button" class="nav-btn" data-view="history">历史</button>
-          <button type="button" class="nav-btn" data-view="settings">设置</button>
-        </nav>
-      </div>
+          <div class="theme-switch" id="theme-switch" data-current="paper">
+            <button type="button" class="theme-switch-trigger" id="theme-trigger" data-picker-neutral="1" aria-haspopup="listbox" aria-expanded="false" title="切换界面主题">
+              <span class="theme-dot" id="theme-dot"></span>
+              <span class="theme-switch-text" id="theme-switch-text">素灰</span>
+              <svg class="theme-glyph" id="theme-glyph" viewBox="0 0 20 20" aria-hidden="true" fill="none"></svg>
+            </button>
+            <div class="theme-menu" id="theme-menu" role="listbox" aria-label="界面主题" hidden></div>
+          </div>
+
+          <span class="status-pill" id="upload-pill" data-stage="not_login" title="数据上传状态">
+            <i class="pill-dot"></i>
+            <span class="pill-text">未登录</span>
+          </span>
+          <nav class="view-nav" id="view-nav">
+            <button type="button" class="nav-btn is-active" data-view="main">概览</button>
+            <button type="button" class="nav-btn" data-view="history">历史</button>
+            <button type="button" class="nav-btn" data-view="settings">设置</button>
+          </nav>
+        </div>
     </header>
 
     <!-- ==================== 历史模式提示条 ==================== -->
@@ -128,6 +154,7 @@
             <span>双击标题可设置备注名</span>
             <span class="dot-sep">·</span>
             <span>右键任意一行可屏蔽该进程</span>
+            <button type="button" class="panel-foot-collapse" id="btn-toggle-foot" aria-expanded="false" title="展开操作提示">操作提示</button>
           </p>
         </div>
       </section>
@@ -189,6 +216,16 @@
                     <span class="switch-track"><span class="switch-thumb"></span></span>
                   </label>
                   <span class="setting-status" id="auto-startup-status">已关闭</span>
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div class="setting-info">
+                  <span class="setting-name">界面主题</span>
+                  <span class="setting-desc">只影响本机界面外观，不改变任何统计与上传行为</span>
+                </div>
+                <div class="setting-control">
+                  <div class="theme-grid" id="theme-grid" role="radiogroup" aria-label="界面主题"></div>
                 </div>
               </div>
 

@@ -1,45 +1,32 @@
-﻿/* ============================================================
-   屏幕视奸器 · WebView 客户端样式
+/* ============================================================
+   屏幕视奸器 · WebView 客户端样式（组件层）
+
    设计基调：「暖木」低饱和阅读版 — 米白/麻纸底 + 墨绿主色，
-   弱化冷调蓝，降低长时间盯屏的视觉疲劳；
-   卡片式布局、圆角、轻投影，所有尺寸适配 920×700 默认窗口。
+   弱化冷调蓝，降低长时间盯屏的视觉疲劳。
+
+   颜色令牌全部来自 css/theme.css，本文件只引用令牌、不写死颜色，
+   因此新增一套主题只需在 theme.css 里加一段 [data-theme="xxx"]。
    ============================================================ */
 
 :root {
-  /* 底色与表面：米白到麻纸的暖灰过渡 */
-  --bg: #f4f1ea;
-  --surface: #fffdf8;
-  --surface-soft: #f6f2ea;
-  --text: #2f2a24;
-  --text-soft: #6b6156;
-  --muted: #9a8f82;
-  --line: #e8e1d6;
-  --line-strong: #dbd2c4;
-
-  /* 主色：墨绿，替代原冷调蓝 */
-  --accent: #2f7a5f;
-  --accent-dark: #245f49;
-  --accent-soft: #e4f0ea;
-
-  /* 语义色同步压低饱和度，避免与暖底打架 */
-  --ok: #3f8f5f;
-  --ok-soft: #e8f3ea;
-  --warn: #b8842f;
-  --warn-soft: #f8efdf;
-  --danger: #b4564b;
-  --danger-soft: #f8e8e5;
-
   --radius-lg: 14px;
   --radius: 11px;
   --radius-sm: 8px;
 
-  /* 投影由冷灰阴影改为暖褐阴影，贴合纸感 */
-  --shadow-sm: 0 1px 2px rgba(90, 72, 50, 0.07);
-  --shadow: 0 10px 26px rgba(90, 72, 50, 0.09);
-  --shadow-lg: 0 24px 60px rgba(90, 72, 50, 0.18);
-
+  /* 字体不随主题变化：中文界面字体固定，避免不同主题字宽跳动 */
   --font: "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, -apple-system, sans-serif;
   --mono: "Cascadia Mono", "Consolas", "SFMono-Regular", ui-monospace, monospace;
+
+  /* 一段统一的缓动：进出场都用它，避免各组件各写一套贝塞尔 */
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  color-scheme: light;
+}
+
+[data-theme="night"],
+[data-theme="aurora"],
+[data-theme="grape"],
+[data-theme="indigo"] {
+  color-scheme: dark;
 }
 
 * {
@@ -56,10 +43,13 @@ body {
   font-family: var(--font);
   font-size: 14px;
   color: var(--text);
-  background: linear-gradient(180deg, #faf7f1 0%, #f4f1ea 55%, #efeae1 100%);
+  background-color: var(--bg);
+  background-image: var(--bg-gradient);
+  background-attachment: fixed;
   overflow: hidden;
   user-select: none;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.28s var(--ease), color 0.28s var(--ease);
 }
 
 input,
@@ -69,6 +59,21 @@ textarea,
 .history-table,
 .status-text {
   user-select: text;
+}
+
+/* 选中文字/光标也走主题色，这是最容易被忽略、又最能看出“是设计过的”细节 */
+::selection {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+
+input::placeholder {
+  color: var(--faint);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 h1,
@@ -81,6 +86,7 @@ p {
 button {
   font-family: inherit;
   cursor: pointer;
+  color: inherit;
 }
 
 [hidden] {
@@ -114,10 +120,10 @@ button {
   justify-content: space-between;
   gap: 16px;
   padding: 12px 22px;
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(12px);
+  background: var(--surface);
   border-bottom: 1px solid var(--line);
   flex: none;
+  transition: background 0.28s var(--ease), border-color 0.28s var(--ease);
 }
 
 .brand {
@@ -134,6 +140,7 @@ button {
   background: var(--accent-soft);
   padding: 4px;
   flex: none;
+  transition: background 0.28s var(--ease);
 }
 
 .brand-text h1 {
@@ -151,7 +158,7 @@ button {
 .topbar-right {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 /* 上传状态胶囊 */
@@ -168,6 +175,7 @@ button {
   background: var(--surface-soft);
   color: var(--text-soft);
   white-space: nowrap;
+  transition: color 0.2s var(--ease), background 0.2s var(--ease), border-color 0.2s var(--ease);
 }
 
 .pill-dot {
@@ -176,22 +184,24 @@ button {
   border-radius: 50%;
   background: var(--muted);
   flex: none;
+  transition: background 0.2s var(--ease);
 }
 
+/* 上传状态只有四种，靠颜色 + 文案区分，不做闪烁：常驻窗口里闪动最耗注意力 */
 .status-pill[data-stage="ok"] {
   color: var(--ok);
-  border-color: rgba(31, 157, 107, 0.28);
+  border-color: color-mix(in srgb, var(--ok) 34%, transparent);
   background: var(--ok-soft);
 }
 
 .status-pill[data-stage="ok"] .pill-dot {
   background: var(--ok);
-  box-shadow: 0 0 0 3px rgba(31, 157, 107, 0.16);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 18%, transparent);
 }
 
 .status-pill[data-stage="error"] {
   color: var(--danger);
-  border-color: rgba(180, 86, 75, 0.28);
+  border-color: color-mix(in srgb, var(--danger) 34%, transparent);
   background: var(--danger-soft);
 }
 
@@ -201,7 +211,7 @@ button {
 
 .status-pill[data-stage="invalid"] {
   color: var(--warn);
-  border-color: rgba(217, 136, 15, 0.3);
+  border-color: color-mix(in srgb, var(--warn) 38%, transparent);
   background: var(--warn-soft);
 }
 
@@ -217,6 +227,7 @@ button {
   border-radius: 12px;
   background: var(--surface-soft);
   border: 1px solid var(--line);
+  transition: background 0.28s var(--ease), border-color 0.28s var(--ease);
 }
 
 .nav-btn {
@@ -228,7 +239,7 @@ button {
   color: var(--text-soft);
   font-size: 13px;
   font-weight: 600;
-  transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+  transition: background 0.16s var(--ease), color 0.16s var(--ease), box-shadow 0.16s var(--ease);
 }
 
 .nav-btn:hover {
@@ -242,6 +253,198 @@ button {
   box-shadow: var(--shadow-sm);
 }
 
+/* ==================== 主题切换（顶栏） ==================== */
+
+.theme-switch {
+  position: relative;
+  flex: none;
+}
+
+.theme-switch-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 11px 0 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: color 0.16s var(--ease), background 0.16s var(--ease), border-color 0.16s var(--ease);
+}
+
+.theme-switch-trigger:hover {
+  border-color: var(--line-strong);
+  background: var(--surface);
+}
+
+/* 触发器夹带一个真实小色块：一眼看到“当前主题长什么样”，比只写主题名更快 */
+.theme-dot {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  border-radius: 4px;
+  background: linear-gradient(135deg, var(--swatch-bg) 0 50%, var(--swatch-accent) 50% 100%);
+  box-shadow: inset 0 0 0 1px rgba(16, 24, 28, 0.18);
+}
+
+.theme-switch.is-open .theme-switch-trigger {
+  border-color: var(--accent);
+  background: var(--surface);
+  color: var(--accent-dark);
+}
+
+.theme-glyph {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  opacity: 0.75;
+}
+
+/* 菜单挂在 body 上，颜色锁死为“浅色面板 + 深色文字”：
+   否则在深色主题下打开菜单，浅色主题的条目会继承页面浅色文字而看不清 */
+.theme-menu {
+  position: fixed;
+  z-index: 40;
+  min-width: 244px;
+  padding: 6px;
+  border-radius: 13px;
+  background: #ffffff;
+  border: 1px solid #dcdfe2;
+  box-shadow: 0 24px 48px -20px rgba(15, 23, 28, 0.35);
+  animation: pop-in 0.14s var(--ease);
+}
+
+.theme-menu-item {
+  display: grid;
+  color: #23292c;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  grid-template-areas:
+    "swatch name check"
+    "swatch note check";
+  align-items: center;
+  column-gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  text-align: left;
+}
+
+.theme-menu-item:hover {
+  background: #eef1f2;
+}
+
+.theme-menu-item .theme-swatch {
+  grid-area: swatch;
+}
+
+.theme-menu-name {
+  grid-area: name;
+  font-size: 13px;
+  font-weight: 600;
+  color: #23292c;
+}
+
+.theme-menu-note {
+  grid-area: note;
+  font-size: 11.5px;
+  color: #5e686d;
+}
+
+.theme-menu-item.is-active .theme-menu-name {
+  color: #1f5540;
+}
+
+.theme-check {
+  grid-area: check;
+  font-size: 12px;
+  color: #2f7a5f;
+  opacity: 0;
+  transition: opacity 0.16s var(--ease);
+}
+
+.theme-menu-item.is-active .theme-check,
+.theme-tile.is-active .theme-check {
+  opacity: 1;
+}
+
+/* 色块：底色 + 主色对角，一眼看出主题性格 */
+.theme-swatch {
+  display: block;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--swatch-bg) 0 52%, var(--swatch-accent) 52% 100%);
+  box-shadow: inset 0 0 0 1px rgba(16, 24, 28, 0.16);
+}
+
+/* ==================== 主题网格（设置页） ==================== */
+
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 8px;
+  width: min(430px, 42vw);
+}
+
+.theme-tile {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  text-align: left;
+  transition: border-color 0.16s var(--ease), background 0.16s var(--ease), transform 0.12s var(--ease);
+}
+
+.theme-tile:hover {
+  border-color: var(--line-strong);
+  background: var(--surface);
+}
+
+.theme-tile:active {
+  transform: scale(0.985);
+}
+
+.theme-tile.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.theme-tile-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.theme-tile-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.theme-tile-note {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* 历史模式提示条 */
 .banner {
   display: flex;
@@ -252,10 +455,11 @@ button {
   padding: 9px 14px;
   border-radius: var(--radius);
   background: var(--warn-soft);
-  border: 1px solid rgba(217, 136, 15, 0.28);
-  color: #7d5718;
+  border: 1px solid color-mix(in srgb, var(--warn) 32%, transparent);
+  color: var(--warn);
   font-size: 13px;
   flex: none;
+  animation: slide-down 0.22s var(--ease);
 }
 
 /* ==================== 内容区 ==================== */
@@ -275,6 +479,7 @@ button {
   gap: 14px;
   min-height: 0;
   flex: 1;
+  animation: view-in 0.26s var(--ease);
 }
 
 /* ---------- 统计卡片 ---------- */
@@ -294,6 +499,11 @@ button {
   border: 1px solid var(--line);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
+  transition: background 0.28s var(--ease), border-color 0.28s var(--ease), box-shadow 0.2s var(--ease);
+}
+
+.stat-card:hover {
+  box-shadow: var(--shadow-md);
 }
 
 .stat-card::after {
@@ -303,7 +513,8 @@ button {
   width: 120px;
   height: 120px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(47, 122, 95, 0.1), transparent 70%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%);
+  pointer-events: none;
 }
 
 .stat-label {
@@ -340,25 +551,29 @@ button {
 }
 
 .stat-card-accent {
-  background: linear-gradient(135deg, #3d8f70, #245f49);
+  background: linear-gradient(135deg, var(--hero-from), var(--hero-to));
   border-color: transparent;
-  box-shadow: 0 10px 24px rgba(36, 95, 73, 0.24);
+  box-shadow: 0 14px 28px -16px color-mix(in srgb, var(--hero-to) 90%, transparent);
+}
+
+.stat-card-accent:hover {
+  box-shadow: 0 18px 34px -16px color-mix(in srgb, var(--hero-to) 90%, transparent);
 }
 
 .stat-card-accent .stat-label,
 .stat-card-accent .stat-foot,
 .stat-card-accent .stat-unit {
-  color: rgba(255, 255, 255, 0.82);
+  color: var(--hero-muted);
 }
 
 .stat-card-accent .stat-value {
-  color: #ffffff;
+  color: var(--hero-text);
   font-family: var(--mono);
   font-size: 23px;
 }
 
 .stat-card-accent::after {
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.22), transparent 70%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--hero-text) 22%, transparent), transparent 70%);
 }
 
 /* ---------- 面板 ---------- */
@@ -372,6 +587,7 @@ button {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
+  transition: background 0.28s var(--ease), border-color 0.28s var(--ease);
 }
 
 .panel-grow {
@@ -404,6 +620,7 @@ button {
   font-size: 12.5px;
   color: var(--muted);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .search-box {
@@ -433,13 +650,13 @@ button {
   color: var(--text);
   font-size: 13px;
   outline: none;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+  transition: border-color 0.16s var(--ease), box-shadow 0.16s var(--ease), background 0.16s var(--ease);
 }
 
 .search-box input:focus {
   border-color: var(--accent);
   background: var(--surface);
-  box-shadow: 0 0 0 3px rgba(47, 122, 95, 0.14);
+  box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
 .search-box input::-webkit-search-cancel-button {
@@ -477,7 +694,7 @@ button {
   font-size: 13px;
   font-family: inherit;
   outline: none;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+  transition: border-color 0.16s var(--ease), box-shadow 0.16s var(--ease), background 0.16s var(--ease);
 }
 
 .dropdown-trigger:hover {
@@ -489,32 +706,32 @@ button {
 .dropdown.is-open .dropdown-trigger {
   border-color: var(--accent);
   background: var(--surface);
-  box-shadow: 0 0 0 3px rgba(47, 122, 95, 0.14);
+  box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
 .dropdown-caret {
   width: 15px;
   height: 15px;
   fill: var(--muted);
-  transition: transform 0.16s ease;
+  transition: transform 0.16s var(--ease);
 }
 
 .dropdown.is-open .dropdown-caret {
   transform: rotate(180deg);
 }
 
+/* 排序菜单固定在 body 层：面板本身 overflow:hidden，放在面板里会被裁掉底部；
+   展开时由 main-view.js 按触发按钮位置摆放 */
 .dropdown-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 30;
+  position: fixed;
+  z-index: 35;
   min-width: 148px;
   padding: 5px;
   border-radius: 12px;
   background: var(--surface);
   border: 1px solid var(--line);
   box-shadow: var(--shadow-lg);
-  animation: pop-in 0.12s ease;
+  animation: pop-in 0.12s var(--ease);
 }
 
 .dropdown-item {
@@ -570,6 +787,51 @@ button {
   margin: 0 6px;
 }
 
+/* 窗口窄到放不下整行提示时，提示条收成一个可点开的小按钮，不再被 Toast 盖住 */
+.panel-foot-collapse {
+  display: none;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.panel-foot-collapse:hover {
+  color: var(--accent-dark);
+  border-color: var(--accent);
+}
+
+@media (max-width: 800px) {
+  .panel-foot {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .panel-foot > span {
+    display: none;
+  }
+
+  .panel-foot.is-open {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .panel-foot.is-open > span,
+  .panel-foot.is-open .dot-sep {
+    display: inline;
+  }
+
+  .panel-foot-collapse {
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
 /* ---------- 表格 ---------- */
 
 table {
@@ -619,17 +881,18 @@ thead th {
   border-bottom: 1px solid var(--line);
   font-size: 13.5px;
   vertical-align: middle;
+  transition: background 0.12s var(--ease);
 }
 
 .app-table tbody tr {
-  transition: background 0.12s ease;
+  transition: background 0.12s var(--ease);
 }
 
-.app-table tbody tr:hover {
-  background: #f4f0e6;
+.app-table tbody tr:hover td {
+  background: var(--surface-soft);
 }
 
-.app-table tbody tr.is-active {
+.app-table tbody tr.is-active td {
   background: var(--accent-soft);
 }
 
@@ -639,12 +902,13 @@ thead th {
 
 .app-table tbody td.col-index {
   text-align: center;
-  color: var(--muted);
+  color: var(--faint);
   font-variant-numeric: tabular-nums;
   font-size: 12.5px;
 }
 
 .cell-name {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -678,6 +942,18 @@ thead th {
   color: var(--ok);
 }
 
+/* 前台运行的应用前面点一个小灯，和行高亮同一套意思，但更容易扫到 */
+.app-table tbody tr.is-active .app-name::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+  vertical-align: middle;
+}
+
 .rename-input {
   width: 100%;
   height: 28px;
@@ -689,7 +965,7 @@ thead th {
   font-family: inherit;
   color: var(--text);
   outline: none;
-  box-shadow: 0 0 0 3px rgba(47, 122, 95, 0.14);
+  box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
 .time-text {
@@ -705,6 +981,38 @@ thead th {
   text-align: right;
 }
 
+/* 时长列加一条随数值增长的内嵌条：扫一眼就能看出谁占大头，不需要读数字 */
+.time-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.time-fill {
+  position: relative;
+  flex: 1;
+  max-width: 84px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.time-fill > i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.5s var(--ease);
+}
+
+.app-table tbody tr.is-active .time-fill > i {
+  background: var(--ok);
+}
+
 .row-btn {
   height: 26px;
   padding: 0 10px;
@@ -714,7 +1022,8 @@ thead th {
   color: var(--text-soft);
   font-size: 12px;
   opacity: 0;
-  transition: opacity 0.14s ease, border-color 0.14s ease, color 0.14s ease, background 0.14s ease;
+  transition: opacity 0.14s var(--ease), border-color 0.14s var(--ease), color 0.14s var(--ease),
+    background 0.14s var(--ease);
 }
 
 .app-table tbody tr:hover .row-btn,
@@ -723,7 +1032,7 @@ thead th {
 }
 
 .row-btn:hover {
-  border-color: rgba(180, 86, 75, 0.4);
+  border-color: color-mix(in srgb, var(--danger) 46%, transparent);
   background: var(--danger-soft);
   color: var(--danger);
 }
@@ -739,10 +1048,11 @@ thead th {
   height: 46px;
   border-bottom: 1px solid var(--line);
   font-size: 13.5px;
+  transition: background 0.12s var(--ease);
 }
 
-.history-table tbody tr:hover {
-  background: #f4f0e6;
+.history-table tbody tr:hover td {
+  background: var(--surface-soft);
 }
 
 .history-table .col-num {
@@ -807,7 +1117,8 @@ thead th {
   font-weight: 600;
   color: var(--text);
   background: var(--surface);
-  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.08s ease, box-shadow 0.16s ease;
+  transition: background 0.16s var(--ease), border-color 0.16s var(--ease), color 0.16s var(--ease),
+    transform 0.08s var(--ease), box-shadow 0.16s var(--ease);
 }
 
 .btn:active:not(:disabled) {
@@ -827,13 +1138,23 @@ thead th {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #3d8f70, #245f49);
-  color: #fff;
-  box-shadow: 0 8px 18px rgba(36, 95, 73, 0.22);
+  background: linear-gradient(135deg, var(--hero-from), var(--hero-to));
+  color: var(--hero-btn-bg);
+  box-shadow: 0 10px 20px -12px color-mix(in srgb, var(--hero-to) 95%, transparent);
 }
 
 .btn-primary:hover:not(:disabled) {
-  box-shadow: 0 10px 22px rgba(36, 95, 73, 0.3);
+  box-shadow: 0 14px 26px -12px color-mix(in srgb, var(--hero-to) 95%, transparent);
+  filter: brightness(1.06);
+}
+
+/* 主按钮放在统计卡那类深色强调底上时反相：白底 + 主色字，保证文字永远压在深色上 */
+.stat-card-accent .btn-primary,
+.stat-card-accent .btn {
+  background: var(--hero-btn-bg);
+  border-color: transparent;
+  color: var(--hero-btn-text);
+  box-shadow: none;
 }
 
 .btn-ghost {
@@ -849,13 +1170,13 @@ thead th {
 }
 
 .btn-danger {
-  background: linear-gradient(135deg, #c47064, var(--danger));
+  background: var(--danger);
   color: #fff;
-  box-shadow: 0 8px 18px rgba(180, 86, 75, 0.24);
+  box-shadow: 0 10px 20px -12px color-mix(in srgb, var(--danger) 90%, transparent);
 }
 
 .btn-danger:hover:not(:disabled) {
-  box-shadow: 0 10px 22px rgba(180, 86, 75, 0.32);
+  filter: brightness(1.07);
 }
 
 /* ==================== 设置 ==================== */
@@ -890,7 +1211,7 @@ thead th {
   font-size: 13.5px;
   font-weight: 600;
   text-align: left;
-  transition: background 0.16s ease, color 0.16s ease;
+  transition: background 0.16s var(--ease), color 0.16s var(--ease);
 }
 
 .settings-nav-btn:hover {
@@ -1002,8 +1323,9 @@ thead th {
   width: 44px;
   height: 24px;
   border-radius: 999px;
-  background: #e0d8ca;
-  transition: background 0.18s ease;
+  background: var(--surface-sunken);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  transition: background 0.18s var(--ease), box-shadow 0.18s var(--ease);
 }
 
 .switch-thumb {
@@ -1013,13 +1335,14 @@ thead th {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(90, 72, 50, 0.3);
-  transition: transform 0.18s ease;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+  transition: transform 0.18s var(--ease);
 }
 
 .switch input:checked + .switch-track {
   background: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 .switch input:checked + .switch-track .switch-thumb {
@@ -1027,7 +1350,7 @@ thead th {
 }
 
 .switch input:focus-visible + .switch-track {
-  box-shadow: 0 0 0 3px rgba(47, 122, 95, 0.2);
+  box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
 /* 表单 */
@@ -1060,17 +1383,13 @@ thead th {
   font-family: inherit;
   color: var(--text);
   outline: none;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
-}
-
-.field input::placeholder {
-  color: #b3a897;
+  transition: border-color 0.16s var(--ease), box-shadow 0.16s var(--ease), background 0.16s var(--ease);
 }
 
 .field input:focus {
   border-color: var(--accent);
   background: var(--surface);
-  box-shadow: 0 0 0 3px rgba(47, 122, 95, 0.14);
+  box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
 .form-actions {
@@ -1090,6 +1409,7 @@ thead th {
   flex-direction: column;
   gap: 5px;
   max-width: 520px;
+  transition: background 0.2s var(--ease), border-color 0.2s var(--ease);
 }
 
 .status-title {
@@ -1109,30 +1429,30 @@ thead th {
 }
 
 .status-card[data-stage="ok"] {
-  border-color: rgba(31, 157, 107, 0.3);
+  border-color: color-mix(in srgb, var(--ok) 36%, transparent);
   background: var(--ok-soft);
 }
 
 .status-card[data-stage="ok"] .status-text {
-  color: #26694a;
+  color: var(--ok);
 }
 
 .status-card[data-stage="error"] {
-  border-color: rgba(180, 86, 75, 0.3);
+  border-color: color-mix(in srgb, var(--danger) 36%, transparent);
   background: var(--danger-soft);
 }
 
 .status-card[data-stage="error"] .status-text {
-  color: #8e3d35;
+  color: var(--danger);
 }
 
 .status-card[data-stage="invalid"] {
-  border-color: rgba(217, 136, 15, 0.32);
+  border-color: color-mix(in srgb, var(--warn) 38%, transparent);
   background: var(--warn-soft);
 }
 
 .status-card[data-stage="invalid"] .status-text {
-  color: #7d5718;
+  color: var(--warn);
 }
 
 /* 屏蔽列表 */
@@ -1156,18 +1476,18 @@ thead th {
   border: 1px solid var(--line);
   background: var(--surface-soft);
   cursor: pointer;
-  transition: border-color 0.14s ease, background 0.14s ease;
+  transition: border-color 0.14s var(--ease), background 0.14s var(--ease);
 }
 
 .blocked-item:hover {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  border-color: var(--line-strong);
+  background: var(--surface);
 }
 
 .blocked-item.is-selected {
   border-color: var(--accent);
   background: var(--accent-soft);
-  box-shadow: 0 0 0 2px rgba(47, 122, 95, 0.14);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 .blocked-name {
@@ -1208,10 +1528,10 @@ thead th {
   min-width: 184px;
   padding: 6px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.98);
+  background: var(--surface);
   border: 1px solid var(--line);
   box-shadow: var(--shadow-lg);
-  animation: pop-in 0.12s ease;
+  animation: pop-in 0.12s var(--ease);
 }
 
 .ctx-item {
@@ -1248,9 +1568,9 @@ thead th {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(15, 30, 52, 0.34);
+  background: color-mix(in srgb, #10161a 42%, transparent);
   backdrop-filter: blur(3px);
-  animation: fade-in 0.14s ease;
+  animation: fade-in 0.14s var(--ease);
 }
 
 .modal {
@@ -1259,7 +1579,7 @@ thead th {
   border-radius: 18px;
   background: var(--surface);
   box-shadow: var(--shadow-lg);
-  animation: pop-in 0.16s ease;
+  animation: pop-in 0.16s var(--ease);
 }
 
 .modal-title {
@@ -1296,34 +1616,51 @@ thead th {
 }
 
 .toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   padding: 9px 16px;
   border-radius: 999px;
   font-size: 13px;
   font-weight: 600;
-  color: #fff;
-  background: rgba(58, 48, 38, 0.94);
-  box-shadow: var(--shadow);
-  animation: toast-in 0.18s ease;
+  color: var(--surface);
+  background: color-mix(in srgb, var(--text) 94%, var(--surface));
+  box-shadow: var(--shadow-md);
+  animation: toast-in 0.18s var(--ease);
   white-space: nowrap;
   max-width: 70vw;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* 用一个纯 CSS 圆点替代 emoji，避免各系统 emoji 字形不同 */
+.toast::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.7;
+  flex: none;
+}
+
 .toast[data-type="success"] {
-  background: rgba(31, 157, 107, 0.95);
+  background: color-mix(in srgb, var(--ok) 92%, var(--surface));
+  color: var(--surface);
 }
 
 .toast[data-type="error"] {
-  background: rgba(180, 86, 75, 0.95);
+  background: color-mix(in srgb, var(--danger) 92%, var(--surface));
+  color: var(--surface);
 }
 
 .toast[data-type="warn"] {
-  background: rgba(217, 136, 15, 0.95);
+  background: color-mix(in srgb, var(--warn) 92%, var(--surface));
+  color: var(--surface);
 }
 
 .toast.is-leaving {
-  animation: toast-out 0.18s ease forwards;
+  animation: toast-out 0.18s var(--ease) forwards;
 }
 
 /* ==================== 动画 ==================== */
@@ -1345,6 +1682,40 @@ thead th {
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes view-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.82);
   }
 }
 
@@ -1370,6 +1741,17 @@ thead th {
   }
 }
 
+/* 尊重系统“减少动态效果”设置：一律关掉动画，只留下状态本身 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* ==================== 滚动条 ==================== */
 
 ::-webkit-scrollbar {
@@ -1378,14 +1760,14 @@ thead th {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #d8cfc0;
+  background: var(--line-strong);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #c4b8a5;
+  background: var(--muted);
   background-clip: content-box;
 }
 
@@ -1400,8 +1782,38 @@ thead th {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  /* 主题网格在窄窗口下改成横向卡片，避免 8 个条目把设置页撑成竖向长条 */
+  .theme-grid {
+    display: flex;
+    gap: 6px;
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+  }
+
+  .theme-tile {
+    flex: none;
+    width: 132px;
+  }
+
+  .theme-tile .theme-tile-note {
+    display: none;
+  }
+
   .brand-text p {
     display: none;
+  }
+
+  /* 窄窗口下设置项改成上下排布，避免左侧文字被右侧控件挤成一列字 */
+  .setting-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .setting-control {
+    justify-content: flex-end;
   }
 
   .settings-layout {
@@ -1411,4 +1823,9 @@ thead th {
   .search-box {
     max-width: 160px;
   }
+
+  .theme-switch-text {
+    display: none;
+  }
+
 }
