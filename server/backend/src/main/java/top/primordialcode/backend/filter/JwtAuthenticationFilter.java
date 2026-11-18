@@ -1,8 +1,11 @@
 package top.primordialcode.backend.filter;
 
-
-import jakarta.servlet.*;
-import jakarta.servlet.http.*;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -12,141 +15,87 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import top.primordialcode.backend.service.Redis.RedisStringServer;
 import top.primordialcode.backend.utils.JwtUtil;
-import io.jsonwebtoken.ExpiredJwtException;
-import io.jsonwebtoken.JwtException;
+
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * JWT 认证过滤器
+ *
+ * 每个请求执行一次，因此日志必须克制：
+ * 只在 debug 级别输出认证结果，避免日志文件被逐请求的三条 info 撑爆。
+ */
 @Slf4j
 @Component
-public class JwtAuthenticationFilter
-        extends OncePerRequestFilter {
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    // 此处是为了使用jwt相关功能
     private final JwtUtil jwtUtil;
 
-    // 此处是为了使用redis相关功能，用Redis做token黑名单
+    /** 用 Redis 做 token 黑名单 */
     @Autowired
     RedisStringServer redisStringServer;
 
-    // 编写构造方法，构造器注入。为了让Spring自动注入JwtUtil。可以替换为Autowired，但构造器注入的好处是final 保证依赖不会被修改
-    public JwtAuthenticationFilter(
-            JwtUtil jwtUtil
-    ){
+    public JwtAuthenticationFilter(JwtUtil jwtUtil) {
         this.jwtUtil = jwtUtil;
-
     }
 
-    // 该方法的作用是实现授权功能
+    /**
+     * 解析并校验 Authorization 头中的 JWT，通过则写入 SecurityContext
+     *
+     * @param request     HTTP 请求
+     * @param response    HTTP 响应
+     * @param filterChain 过滤器链
+     */
     @Override
     protected void doFilterInternal(
             HttpServletRequest request,
             HttpServletResponse response,
             FilterChain filterChain
     ) throws ServletException, IOException {
-        // 获取Authorization请求头，其值中包含Jwt的token
         String header = request.getHeader("Authorization");
 
-        // 判断jwtToken的合法性
-        if(header != null
+        if (header != null
                 && header.startsWith("Bearer ")
-                && SecurityContextHolder  //true:当前请求还没有建立认证身份，可以继续执行 JWT 认证。false:当前请求已经有认证信息了，不需要再次通过 JWT 认证。
-                .getContext()
-                .getAuthentication() == null) {
+                && SecurityContextHolder.getContext().getAuthentication() == null) {
 
             String token = header.substring(7);
 
-            // 判断是否在黑名单中
-            boolean inBlackList = redisStringServer.existKey("jwt:blacklist:"+token);
-            if (inBlackList){
-                // 设置返回值为401
-                response.setStatus(
-                        HttpServletResponse.SC_UNAUTHORIZED
-                );
-                //如果在黑名单中则直接返回。无需解析
+            // 黑名单命中(已退出登录)直接 401
+            if (redisStringServer.existKey("jwt:blacklist:" + token)) {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 return;
             }
-
 
             try {
-                //解析JWT
                 String email = jwtUtil.parse(token);
-                
-                //从JWT中获取角色信息
                 String role = jwtUtil.getRole(token);
-                
-                //根据角色创建权限列表
-                List<SimpleGrantedAuthority> authorities;
-                if (role != null && !role.isEmpty()) {
-                    // 如果有角色信息，则直接使用(不进行大小写转换)
-                    authorities = Collections.singletonList(
-                            new SimpleGrantedAuthority(role)
-                    );
-                } else {
-                    // 如果没有角色信息，则为空列表(兼容旧token)
-                    authorities = Collections.emptyList();
-                }
-                
-                //创建认证对象
+
+                List<SimpleGrantedAuthority> authorities = (role != null && !role.isEmpty())
+                        ? Collections.singletonList(new SimpleGrantedAuthority(role))
+                        : Collections.emptyList();
+
                 UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(
-                                email,//标识用户是谁
-                                null,//用户凭证，一般设为null
-                                authorities//为该用户授予的角色权限
-                        );
+                        new UsernamePasswordAuthenticationToken(email, null, authorities);
+                SecurityContextHolder.getContext().setAuthentication(authentication);
 
-                //保存用户信息
-                SecurityContextHolder
-                        .getContext()
-                        .setAuthentication(authentication);
-
-                // 日志记录当前状态（非必须添加）
-                log.info(
-                        "认证状态：" + authentication.isAuthenticated()
-                );
-
-                log.info(
-                        "当前用户：" + authentication.getPrincipal()
-                );
-
-                log.info(
-                        "当前权限：" + authentication.getAuthorities()
-                );
-            }
-            catch(ExpiredJwtException e){
-                log.warn("JWT token已过期: {}", e.getMessage());
-                //设置返回值
-                response.setStatus(
-                        HttpServletResponse.SC_UNAUTHORIZED
-                );
+                log.debug("JWT认证通过: subject={}, authorities={}",
+                        authentication.getPrincipal(), authentication.getAuthorities());
+            } catch (ExpiredJwtException e) {
+                log.debug("JWT token已过期: {}", e.getMessage());
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 return;
-            }
-            catch(JwtException e){
-                log.warn("JWT token验证失败: {}", e.getMessage());
-                //设置返回值
-                response.setStatus(
-                        HttpServletResponse.SC_UNAUTHORIZED
-                );
+            } catch (JwtException e) {
+                log.debug("JWT token验证失败: {}", e.getMessage());
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 return;
-            }
-            catch(Exception e){
-                log.error("JWT鉴权未知异常:", e);
-
-                //设置返回值
-                response.setStatus(
-                        HttpServletResponse.SC_UNAUTHORIZED
-                );
+            } catch (Exception e) {
+                log.error("JWT鉴权未知异常", e);
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 return;
             }
         }
 
-
-        // 继续执行请求
-        // 把当前请求继续交给过滤器链中后面的过滤器处理。
-        filterChain.doFilter(
-                request,
-                response
-        );
+        filterChain.doFilter(request, response);
     }
 }

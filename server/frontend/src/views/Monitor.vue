@@ -1,108 +1,108 @@
 <template>
-  <div class="monitor-page">
-    <AppHeader />
-    
-    <div class="monitor-container">
-      <div class="sidebar">
-        <Calendar
-          v-model="selectedDate"
-          :data-dates="dataStore.dataDatesList"
-          @date-change="handleDateChange"
-        />
-      </div>
-      
-      <div class="main-content">
-        <!-- 实时状态展示 -->
-        <div class="status-bar">
-          <div class="current-app">
-            <span class="label">当前使用:</span>
-            <span class="app-name">{{ currentApp }}</span>
-            <el-tag v-if="isRealtime" type="success" size="small">实时</el-tag>
-            <el-tag v-else type="info" size="small">历史数据</el-tag>
-          </div>
-          
-          <div class="connection-status">
-            <el-icon v-if="wsStore.connected" color="#67c23a">
-              <SuccessFilled />
-            </el-icon>
-            <el-icon v-else-if="wsStore.reconnecting" color="#e6a23c">
-              <Loading />
-            </el-icon>
-            <el-icon v-else color="#f56c6c">
-              <CircleClose />
-            </el-icon>
-            <span v-if="wsStore.error" class="error-text">{{ wsStore.error }}</span>
-            <span v-else>{{ connectionStatus }}</span>
-          </div>
-        </div>
-        
-        <!-- 图表展示 -->
-        <div class="charts-section">
-          <el-card class="chart-card">
-            <template #header>
-              <h3>应用使用时长占比</h3>
-            </template>
-            <PieChart v-if="pieChartData.length > 0" :data="pieChartData" />
-            <el-empty v-else description="暂无数据" />
-          </el-card>
-          
-          <el-card class="chart-card">
-            <template #header>
-              <h3>应用使用时长排行</h3>
-            </template>
-            <BarChart v-if="barChartData.length > 0" :data="barChartData" />
-            <el-empty v-else description="暂无数据" />
-          </el-card>
-        </div>
-        
-        <!-- 统计数据卡片(键盘鼠标信息) -->
-        <div class="stats-section">
-          <StatsCard
-            type="keyboard"
-            :value="statistics.keyboardCount"
-            label="键盘敲击"
-          />
-          <StatsCard
-            type="mouse-click"
-            :value="statistics.mouseClickCount"
-            label="鼠标点击"
-          />
-          <StatsCard
-            type="mouse-distance"
-            :value="statistics.mouseDistance"
-            label="鼠标移动距离"
-          />
-        </div>
+  <AppShell>
+    <!-- 侧栏：日历 + 当日摘要，桌面端吸附在顶部 -->
+    <template #sidebar>
+      <Calendar
+        v-model="selectedDate"
+        :data-dates="dataStore.dataDatesList"
+        @date-change="handleDateChange"
+      />
 
-        <!-- 应用使用时长排行列表(键盘鼠标统计卡片下方) -->
-        <AppDurationRanking
-          :title="rankingTitle"
-          :items="rankingItems"
-          :total-duration="statistics.totalDuration ?? null"
-          :previous-duration="isRealtime ? yesterdayTotal : null"
-          :show-status="isRealtime"
-        />
-      </div>
+      <section class="side-summary">
+        <h2 class="side-title">今日排行</h2>
+        <ol v-if="topThree.length > 0" class="side-list">
+          <li v-for="(item, index) in topThree" :key="item.name" class="side-item">
+            <span class="side-rank tabular">{{ index + 1 }}</span>
+            <span class="side-name" :title="item.name">{{ item.name }}</span>
+            <span class="side-duration tabular">{{ formatDurationText(item.duration) }}</span>
+          </li>
+        </ol>
+        <p v-else class="side-empty">暂无数据</p>
+      </section>
+    </template>
+
+    <!-- 主内容 -->
+    <HeroMetric
+      :date-label="dateLabel"
+      :total-seconds="statistics.totalDuration ?? 0"
+      :previous-seconds="isRealtime ? yesterdayTotal : null"
+      :loading="dataStore.loading && !hasAnyData"
+      :status-text="statusText"
+      :status-type="statusType"
+    >
+    </HeroMetric>
+
+    <HourTimeline
+      title="一天的时间分布"
+      :hint="isRealtime ? '实时更新中' : '按所选日期'"
+      :applications="rankedApps"
+      :total-seconds="timelineTotal"
+    />
+
+    <section class="stats-grid" aria-label="输入统计">
+      <StatsCard
+        type="keyboard"
+        :value="statistics.keyboardCount ?? 0"
+        :display-value="formatNumber(statistics.keyboardCount ?? 0)"
+        unit="次"
+        label="键盘敲击"
+        :loading="dataStore.loading"
+      />
+      <StatsCard
+        type="mouse-click"
+        :value="statistics.mouseClickCount ?? 0"
+        :display-value="formatNumber(statistics.mouseClickCount ?? 0)"
+        unit="次"
+        label="鼠标点击"
+        :loading="dataStore.loading"
+      />
+      <StatsCard
+        type="mouse-distance"
+        :value="statistics.mouseDistance ?? 0"
+        :display-value="distanceText.value"
+        :unit="distanceText.unit"
+        label="鼠标移动"
+        :loading="dataStore.loading"
+      />
+    </section>
+
+    <AppDurationRanking
+      :title="rankingTitle"
+      :items="rankingItems"
+      :loading="dataStore.loading"
+      :show-status="isRealtime"
+    />
+
+    <!-- 连接状态提示：断线时给出可操作的一句话，而不是只在角落变红点 -->
+    <div v-if="connectionHint" class="connection-banner" :class="`is-${statusType}`" role="status">
+      <span class="banner-dot" aria-hidden="true"></span>
+      <span class="banner-text">{{ connectionHint }}</span>
     </div>
-  </div>
+  </AppShell>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import AppShell from '@/components/AppShell.vue'
+import Calendar from '@/components/Calendar.vue'
+import HeroMetric from '@/components/HeroMetric.vue'
+import HourTimeline from '@/components/HourTimeline.vue'
+import StatsCard from '@/components/StatsCard.vue'
+import AppDurationRanking from '@/components/AppDurationRanking.vue'
 import { useDataStore } from '@/stores/data'
 import { useWebSocketStore } from '@/stores/websocket'
 import { useUserStore } from '@/stores/user'
-import AppHeader from '@/components/AppHeader.vue'
-import Calendar from '@/components/Calendar.vue'
-import PieChart from '@/components/PieChart.vue'
-import BarChart from '@/components/BarChart.vue'
-import StatsCard from '@/components/StatsCard.vue'
-import AppDurationRanking from '@/components/AppDurationRanking.vue'
-import { SuccessFilled, Loading, CircleClose } from '@element-plus/icons-vue'
 import { getHistoryDataApi } from '@/api'
 import type { WebSocketMessage } from '@/types/websocket'
-import { toLocalDateKey, toLocalYearMonthKey } from '@/utils/format'
+import {
+  formatChineseDate,
+  formatDurationText,
+  formatNumber,
+  splitDistance,
+  toLocalDateKey,
+  toLocalYearMonthKey
+} from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -110,60 +110,25 @@ const dataStore = useDataStore()
 const wsStore = useWebSocketStore()
 const userStore = useUserStore()
 
-// 默认选中本地时区的今天(与Calendar、后端Asia/Shanghai归属日期保持一致)
+// 默认选中本地时区的今天(与 Calendar、后端 Asia/Shanghai 归属日期保持一致)
 const selectedDate = ref(toLocalDateKey())
 const isRealtime = ref(true)
-const userId = ref<string>('')
-const secretKey = ref<string>('')
+const userId = ref('')
+const secretKey = ref('')
 
-const currentApp = computed(() => {
-  if (isRealtime.value && dataStore.realtimeData) {
-    const activeApp = dataStore.realtimeData.applications.find(app => app.isActive)
-    if (activeApp) {
-      return `${activeApp.name} (${activeApp.windowTitle})`
-    }
-  }
-  return '无活跃应用'
-})
+const dateLabel = computed(() => formatChineseDate(selectedDate.value))
 
-const connectionStatus = computed(() => {
-  if (wsStore.connected) return '已连接'
-  if (wsStore.reconnecting) return '重连中...'
-  return '未连接'
-})
+const hasAnyData = computed(() =>
+  isRealtime.value ? Boolean(dataStore.realtimeData) : Boolean(dataStore.historyData)
+)
 
-const pieChartData = computed(() => {
-  const apps = isRealtime.value
-    ? dataStore.realtimeData?.applications || []
-    : dataStore.historyData?.applications || []
-  
-  return apps.map(app => ({
-    name: app.name,
-    value: 'duration' in app ? app.duration : app.totalDuration
-  })).sort((a, b) => b.value - a.value)
-})
-
-const barChartData = computed(() => {
-  return pieChartData.value
-})
-
-const statistics = computed(() => {
-  const data = isRealtime.value ? dataStore.realtimeData : dataStore.historyData
-  return data?.statistics || {
-    keyboardCount: 0,
-    mouseClickCount: 0,
-    mouseDistance: 0
-  }
-})
-
-// 应用使用时长排行列表数据(当前视图: 实时或选中历史日期, 未排序交给组件处理)
-const rankingItems = computed(() => {
+// 当前视图的应用列表(实时/历史字段不同，统一成 name + duration)
+const currentApps = computed(() => {
   const apps = isRealtime.value
     ? dataStore.realtimeData?.applications || []
     : dataStore.historyData?.applications || []
 
-  return apps.map(app => {
-    // 实时数据才携带运行状态(isActive/isRunning), 历史数据无状态
+  return apps.map((app) => {
     const isRealtimeApp = 'isActive' in app
     return {
       name: app.name,
@@ -174,24 +139,63 @@ const rankingItems = computed(() => {
   })
 })
 
-// 排行卡片标题(今日实时视图与历史日期视图区分)
-const rankingTitle = computed(() => {
-  if (isRealtime.value) {
-    return '今日应用使用时长'
-  }
-  const parts = selectedDate.value.split('-')
-  if (parts.length !== 3) {
-    return '应用使用时长'
-  }
-  return `${Number(parts[1])}月${Number(parts[2])}日 应用使用时长`
+const rankedApps = computed(() =>
+  [...currentApps.value].sort((a, b) => b.duration - a.duration)
+)
+
+const rankingItems = computed(() => currentApps.value)
+
+const statistics = computed(() => {
+  const data = isRealtime.value ? dataStore.realtimeData : dataStore.historyData
+  return (
+    data?.statistics || {
+      keyboardCount: 0,
+      mouseClickCount: 0,
+      mouseDistance: 0,
+      totalDuration: 0
+    }
+  )
 })
 
-// 昨日总时长(秒), 用于"今日 vs 昨天"对比; 无昨日数据时为 null(不显示对比)。
-// 与今日总时长同口径: 取昨日客户端程序运行时长(历史统计totalDuration), 而非应用时长总和
+// 色带使用的总时长：优先用客户端运行时长，缺失时回退为应用时长之和
+const timelineTotal = computed(() => {
+  const total = statistics.value.totalDuration
+  if (total && total > 0) return total
+  return rankedApps.value.reduce((sum, app) => sum + app.duration, 0)
+})
+
+const topThree = computed(() => rankedApps.value.filter((app) => app.duration > 0).slice(0, 3))
+
+// 鼠标移动距离拆成"数值 + 单位"两段，便于大字排版(1240.5 m / 1.24 km)
+const distanceText = computed(() => splitDistance(statistics.value.mouseDistance ?? 0))
+
+const rankingTitle = computed(() =>
+  isRealtime.value ? '今天用得最多的应用' : `${formatChineseDate(selectedDate.value)} 的应用`
+)
+
+// 连接状态：文案直接给用户看，所以区分「实时/历史/重连中」
+const statusText = computed(() => {
+  if (!isRealtime.value) return '历史数据'
+  if (wsStore.connected) return '实时同步中'
+  if (wsStore.reconnecting) return '重连中'
+  return '已离线'
+})
+
+const statusType = computed<'live' | 'history' | 'offline'>(() => {
+  if (!isRealtime.value) return 'history'
+  return wsStore.connected ? 'live' : 'offline'
+})
+
+const connectionHint = computed(() => {
+  if (!isRealtime.value || wsStore.connected) return ''
+  if (wsStore.reconnecting) return '连接已断开，正在自动重连，页面数据可能不是最新的'
+  return '未连接到服务器，当前显示的是最后一次拉取的数据'
+})
+
+// 昨日总时长(秒)：仅实时视图用于"比昨天"对比
 const yesterdayTotal = ref<number | null>(null)
 
 const loadYesterdayTotal = async () => {
-  // 仅在今日实时视图下做昨日对比
   if (!isRealtime.value) {
     yesterdayTotal.value = null
     return
@@ -203,37 +207,29 @@ const loadYesterdayTotal = async () => {
 
   try {
     const res = await getHistoryDataApi(yesterdayKey, secretKey.value || undefined)
-    const stats = res.data?.statistics
-    const prevTotal = stats?.totalDuration
-    // 昨日无统计或运行时长为0/缺失(旧客户端或当日未记录)时, 视为无可对比数据
-    if (!prevTotal || prevTotal <= 0) {
-      yesterdayTotal.value = null
-      return
-    }
-    yesterdayTotal.value = prevTotal
-  } catch (error) {
-    // 昨日无数据或请求失败均视为无法对比,不打断页面主流程
+    const prevTotal = res.data?.statistics?.totalDuration
+    yesterdayTotal.value = prevTotal && prevTotal > 0 ? prevTotal : null
+  } catch {
+    // 昨日无数据或请求失败都视为无法对比，不打断页面主流程
     yesterdayTotal.value = null
   }
 }
 
 const handleDateChange = async (date: string) => {
-  const today = toLocalDateKey()
-  isRealtime.value = date === today
-  
+  isRealtime.value = date === toLocalDateKey()
+
   if (isRealtime.value) {
     await dataStore.fetchRealtimeData(secretKey.value)
   } else {
     await dataStore.fetchHistoryData(date, secretKey.value)
   }
 
-  // 切换日期后刷新排行卡片"昨日对比"数据(历史日期视图不展示对比)
   await loadYesterdayTotal()
 }
 
 const handleWsMessage = (message: WebSocketMessage) => {
   if (message.type === 'realtime_update' && isRealtime.value) {
-    // 合并推送的实时数据(推送仅含applications/statistics，保留原有userId等信息)
+    // 合并推送的实时数据(推送仅含 applications/statistics，保留原有 userId 等信息)
     const merged = {
       ...(dataStore.realtimeData || {}),
       userId: message.userId,
@@ -242,8 +238,6 @@ const handleWsMessage = (message: WebSocketMessage) => {
       statistics: message.data?.statistics
     } as any
     dataStore.updateRealtimeData(merged)
-  } else if (message.type === 'error') {
-    console.error('WebSocket错误:', message.code, message.message)
   }
 }
 
@@ -255,30 +249,22 @@ onMounted(async () => {
     await userStore.fetchUserInfo()
   }
 
-  // 获取userId(本系统中为用户邮箱)和secretKey
   userId.value = (route.params.userId as string) || userStore.userInfo?.email || ''
-  secretKey.value = route.query.key as string || ''
+  secretKey.value = (route.query.key as string) || ''
   const authKey = secretKey.value || undefined
 
-  // 监控页必须有访问凭证(Token或秘钥),否则跳转秘钥/登录入口页
+  // 监控页必须有访问凭证(Token 或秘钥)，否则跳转秘钥入口页
   if (!authToken && !authKey) {
     router.replace('/login')
     return
   }
 
-  // 获取当前月份有数据的日期(用本地年月,与日历一致)
-  const yearMonth = toLocalYearMonthKey()
-  await dataStore.fetchDataDates(yearMonth, authKey)
-
-  // 获取实时数据
-  await dataStore.fetchRealtimeData(authKey)
-
-  // 加载昨日总时长(供"今日应用使用时长"排行卡片对比)
+  await Promise.all([
+    dataStore.fetchDataDates(toLocalYearMonthKey(), authKey),
+    dataStore.fetchRealtimeData(authKey)
+  ])
   await loadYesterdayTotal()
 
-  // 连接WebSocket(秘钥查看者用秘钥,登录用户用Token)。
-  // 秘钥查看者: 不显式订阅任何userId,服务端建连后会自动订阅秘钥持有者;
-  // Token登录用户: 显式订阅自己的邮箱(与服务端自动订阅一致,无副作用)
   if (authKey || authToken) {
     wsStore.connect(authKey ? '' : userId.value, authToken, authKey)
     wsStore.setMessageHandler(handleWsMessage)
@@ -290,117 +276,107 @@ onUnmounted(() => {
   wsStore.disconnect()
 })
 
-watch(() => selectedDate.value, (newDate) => {
-  const yearMonth = newDate.slice(0, 7)
-  dataStore.fetchDataDates(yearMonth, secretKey.value)
+watch(selectedDate, (newDate) => {
+  dataStore.fetchDataDates(newDate.slice(0, 7), secretKey.value)
 })
 </script>
 
 <style scoped>
-.monitor-page {
-  min-height: 100vh;
-  background: #f5f7fa;
+/* 侧栏摘要 */
+.side-summary {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-4) var(--space-5);
 }
 
-.monitor-container {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 20px;
-  display: grid;
-  grid-template-columns: 320px 1fr;
-  gap: 20px;
+.side-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-3);
 }
 
-.sidebar {
-  position: sticky;
-  top: 80px;
-  height: fit-content;
-}
-
-.main-content {
+.side-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--space-3);
 }
 
-.status-bar {
-  background: #fff;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.current-app {
+.side-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
 }
 
-.current-app .label {
-  color: #909399;
-  font-size: 14px;
+.side-rank {
+  width: 14px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
 }
 
-.current-app .app-name {
-  font-size: 16px;
+.side-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+
+.side-duration {
+  flex-shrink: 0;
+  color: var(--text);
   font-weight: 600;
-  color: #303133;
 }
 
-.connection-status {
+.side-empty {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+/* 三宫格 */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+/* 连接状态条：有信息才出现，固定在内容末尾不遮挡操作 */
+.connection-banner {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: #606266;
-  font-size: 14px;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
 }
 
-.connection-status .error-text {
-  color: #f56c6c;
-  font-size: 13px;
+.connection-banner.is-offline {
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 
-.charts-section {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
+.connection-banner.is-history {
+  background: var(--surface-2);
+  color: var(--text-muted);
 }
 
-.chart-card {
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+.banner-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: currentColor;
 }
 
-.chart-card h3 {
-  margin: 0;
-  font-size: 16px;
-  color: #303133;
-}
-
-.stats-section {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
-}
-
-@media (max-width: 1200px) {
-  .monitor-container {
-    grid-template-columns: 1fr;
-  }
-  
-  .sidebar {
-    position: static;
-  }
-}
-
-@media (max-width: 768px) {
-  .charts-section {
-    grid-template-columns: 1fr;
-  }
-  
-  .stats-section {
+@media (max-width: 900px) {
+  .stats-grid {
     grid-template-columns: 1fr;
   }
 }

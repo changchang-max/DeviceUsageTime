@@ -163,8 +163,8 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
       ws.onerror = () => {
         if (generation !== currentGeneration) return
-        console.error('WebSocket连接错误')
-        error.value = 'WebSocket连接错误'
+        // 失败原因由 onclose 统一处理；这里不再额外打日志，避免控制台刷屏
+        error.value = '实时连接中断'
       }
     } catch (err) {
       console.error('创建WebSocket失败:', err)

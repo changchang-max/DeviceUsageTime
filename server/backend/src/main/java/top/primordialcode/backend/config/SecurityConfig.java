@@ -55,9 +55,13 @@ public class SecurityConfig {
                                         // 数据查询接口支持秘钥认证(无token)，在Controller/Service层手动校验身份
                                         "/api/data/realtime",
                                         "/api/data/history",
+                                        "/api/data/titles",
                                         "/api/data/dates",
                                         // 数据上传接口使用上传凭证认证(无token)，在Controller/Service层手动校验身份
-                                        "/api/data/upload"
+                                        "/api/data/upload",
+                                        // 健康检查：只暴露 health(不含敏感细节)
+                                        "/actuator/health",
+                                        "/actuator/health/**"
                                 ).permitAll()
 
                                 // ========== ROLE_USER角色专属接口 ==========

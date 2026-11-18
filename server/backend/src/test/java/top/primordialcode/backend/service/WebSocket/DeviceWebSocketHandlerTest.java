@@ -17,6 +17,7 @@ import org.springframework.web.socket.WebSocketSession;
 import top.primordialcode.backend.dto.DataUpload.ApplicationDTO;
 import top.primordialcode.backend.dto.DataUpload.StatisticsDTO;
 import top.primordialcode.backend.mapper.UserAuthMapper;
+import top.primordialcode.backend.utils.UserLookupCache;
 
 import java.time.Instant;
 import java.util.Arrays;
@@ -25,6 +26,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 /**
@@ -37,7 +39,7 @@ import static org.mockito.Mockito.*;
 class DeviceWebSocketHandlerTest {
 
     @Mock
-    private UserAuthMapper userAuthMapper;
+    private UserLookupCache userLookupCache;
 
     private ObjectMapper objectMapper;
     private DeviceWebSocketHandler handler;
@@ -48,7 +50,7 @@ class DeviceWebSocketHandlerTest {
         objectMapper = new ObjectMapper()
                 .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        handler = new DeviceWebSocketHandler(objectMapper, userAuthMapper);
+        handler = new DeviceWebSocketHandler(objectMapper, userLookupCache, new InMemorySubscriptionRegistry());
     }
 
     /**
@@ -108,6 +110,7 @@ class DeviceWebSocketHandlerTest {
         JsonNode connected = lastMessage(session);
         assertEquals("connected", connected.path("type").asText());
         assertEquals("owner@example.com", connected.path("userId").asText());
+        assertEquals(1, handler.onlineSessionCount());
     }
 
     @Test
@@ -123,7 +126,6 @@ class DeviceWebSocketHandlerTest {
     @Test
     @DisplayName("无认证身份时拒绝连接")
     void testConnectionWithoutIdentityClosed() throws Exception {
-        // 不使用mockSession: 无身份场景不会用到isOpen/getId桩
         WebSocketSession session = mock(WebSocketSession.class);
         when(session.getAttributes()).thenReturn(new HashMap<>());
 
@@ -150,14 +152,13 @@ class DeviceWebSocketHandlerTest {
     void testPushRealtimeUpdate() throws Exception {
         WebSocketSession session = connect("owner@example.com", DeviceWebSocketHandler.AUTH_MODE_TOKEN);
 
-        // 服务端在客户端上传后推送完整实时快照
-        handler.pushRealtimeUpdate(
+        int delivered = handler.pushRealtimeUpdate(
                 "owner@example.com",
                 Instant.parse("2026-07-12T10:30:45Z"),
                 Arrays.asList(application("Chrome", true), application("VSCode", false)),
-                statistics()
-        );
+                statistics());
 
+        assertEquals(1, delivered);
         JsonNode update = lastMessage(session);
         assertEquals("realtime_update", update.path("type").asText());
         assertEquals("owner@example.com", update.path("userId").asText());
@@ -174,10 +175,8 @@ class DeviceWebSocketHandlerTest {
 
         handler.pushRealtimeUpdate("owner@example.com", Instant.now(),
                 Arrays.asList(application("Chrome", true)), null);
-        // 取消订阅
         handler.handleTextMessage(session,
                 new TextMessage("{\"type\":\"unsubscribe\",\"userId\":\"owner@example.com\"}"));
-        // 再次推送: 不应再有消息发出
         handler.pushRealtimeUpdate("owner@example.com", Instant.now(),
                 Arrays.asList(application("Chrome", true)), null);
 
@@ -188,8 +187,7 @@ class DeviceWebSocketHandlerTest {
     @DisplayName("订阅无权限用户返回403")
     void testSubscribeForbidden() throws Exception {
         WebSocketSession session = connect("owner@example.com", DeviceWebSocketHandler.AUTH_MODE_KEY);
-        // 目标用户存在但不是秘钥持有者
-        when(userAuthMapper.existsByEmail("other@example.com")).thenReturn(true);
+        when(userLookupCache.existsByEmail("other@example.com")).thenReturn(true);
 
         handler.handleTextMessage(session,
                 new TextMessage("{\"type\":\"subscribe\",\"userId\":\"other@example.com\"}"));
@@ -203,7 +201,8 @@ class DeviceWebSocketHandlerTest {
     @DisplayName("订阅不存在的用户返回404")
     void testSubscribeUserNotFound() throws Exception {
         WebSocketSession session = connect("owner@example.com", DeviceWebSocketHandler.AUTH_MODE_TOKEN);
-        // existsByEmail默认false
+        when(userLookupCache.existsByEmail("ghost@example.com")).thenReturn(false);
+
         handler.handleTextMessage(session,
                 new TextMessage("{\"type\":\"subscribe\",\"userId\":\"ghost@example.com\"}"));
 
@@ -220,8 +219,7 @@ class DeviceWebSocketHandlerTest {
         handler.handleTextMessage(session,
                 new TextMessage("{\"type\":\"subscribe\",\"userId\":\"owner@example.com\"}"));
 
-        // 授权订阅不应触发数据库查询，也不应发送任何错误
-        verify(userAuthMapper, never()).existsByEmail(anyString());
+        verify(userLookupCache, never()).existsByEmail(anyString());
         verify(session, times(1)).sendMessage(any(TextMessage.class)); // 仅connected消息
     }
 
@@ -255,10 +253,24 @@ class DeviceWebSocketHandlerTest {
         WebSocketSession session = connect("owner@example.com", DeviceWebSocketHandler.AUTH_MODE_TOKEN);
 
         handler.afterConnectionClosed(session, CloseStatus.NORMAL);
-        // 清理后推送不应发送消息(仅connected一条)
-        handler.pushRealtimeUpdate("owner@example.com", Instant.now(),
+        int delivered = handler.pushRealtimeUpdate("owner@example.com", Instant.now(),
                 Arrays.asList(application("Chrome", true)), null);
 
+        assertEquals(0, delivered);
+        assertEquals(0, handler.onlineSessionCount());
         verify(session, times(1)).sendMessage(any(TextMessage.class));
+    }
+
+    @Test
+    @DisplayName("空闲连接被回收(客户端强杀场景)")
+    void testEvictIdleSessions() throws Exception {
+        WebSocketSession session = connect("owner@example.com", DeviceWebSocketHandler.AUTH_MODE_TOKEN);
+        assertEquals(1, handler.onlineSessionCount());
+
+        int removed = handler.evictIdleSessions(0L);
+
+        assertEquals(1, removed);
+        assertEquals(0, handler.onlineSessionCount());
+        verify(session).close(any(CloseStatus.class));
     }
 }

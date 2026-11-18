@@ -1,99 +1,110 @@
 <template>
-  <div class="register-page">
-    <div class="register-container">
-      <div class="register-header">
-        <h2>注册</h2>
-        <p>创建您的账号</p>
-      </div>
-      
-      <el-form
-        ref="formRef"
-        :model="formData"
-        :rules="rules"
-        label-position="top"
-        size="large"
-      >
-        <el-form-item label="邮箱" prop="email">
-          <el-input
-            v-model="formData.email"
-            placeholder="请输入邮箱"
-            clearable
-          >
-            <template #append>
-              <el-button
-                :disabled="countdown > 0"
-                @click="handleSendCode"
-              >
-                {{ countdown > 0 ? `${countdown}秒后重试` : '发送验证码' }}
-              </el-button>
-            </template>
-          </el-input>
-        </el-form-item>
-        
-        <el-form-item label="验证码" prop="code">
+  <AuthShell
+    heading="创建账号，开始记录"
+    description="注册后你的设备使用数据会自动同步到这台服务器，随时回看每一天。"
+    :points="points"
+    title="注册账号"
+    subtitle="注册成功后会获得一个专属只读秘钥"
+  >
+    <el-form
+      ref="formRef"
+      :model="formData"
+      :rules="rules"
+      label-position="top"
+      size="large"
+      @submit.prevent="handleRegister"
+    >
+      <el-form-item label="邮箱" prop="email">
+        <el-input
+          v-model="formData.email"
+          placeholder="you@example.com"
+          clearable
+          autocomplete="email"
+        />
+      </el-form-item>
+
+      <el-form-item label="验证码" prop="code">
+        <div class="code-row">
           <el-input
             v-model="formData.code"
-            placeholder="请输入6位验证码"
+            placeholder="6 位验证码"
             maxlength="6"
             clearable
+            autocomplete="one-time-code"
           />
-        </el-form-item>
-        
-        <el-form-item label="密码" prop="password">
-          <el-input
-            v-model="formData.password"
-            type="password"
-            placeholder="至少8位,包含字母和数字"
-            show-password
-            clearable
-          />
-        </el-form-item>
-        
-        <el-form-item label="确认密码" prop="confirmPassword">
-          <el-input
-            v-model="formData.confirmPassword"
-            type="password"
-            placeholder="请再次输入密码"
-            show-password
-            clearable
-            @keyup.enter="handleRegister"
-          />
-        </el-form-item>
-        
-        <el-form-item>
-          <el-button
-            type="primary"
-            :loading="loading"
-            style="width: 100%"
-            @click="handleRegister"
+          <button
+            type="button"
+            class="code-button"
+            :disabled="countdown > 0 || sendingCode"
+            @click="handleSendCode"
           >
-            注册
-          </el-button>
-        </el-form-item>
-      </el-form>
-      
-      <div class="footer-links">
-        <span>已有账号?</span>
-        <el-button type="text" @click="router.push('/login')">
-          立即登录
-        </el-button>
-      </div>
-    </div>
-  </div>
+            {{ codeButtonText }}
+          </button>
+        </div>
+      </el-form-item>
+
+      <el-form-item label="密码" prop="password">
+        <el-input
+          v-model="formData.password"
+          type="password"
+          placeholder="至少 8 位，包含字母和数字"
+          show-password
+          clearable
+          autocomplete="new-password"
+        />
+      </el-form-item>
+
+      <el-form-item label="确认密码" prop="confirmPassword">
+        <el-input
+          v-model="formData.confirmPassword"
+          type="password"
+          placeholder="再次输入密码"
+          show-password
+          clearable
+          autocomplete="new-password"
+          @keyup.enter="handleRegister"
+        />
+      </el-form-item>
+
+      <el-button
+        class="submit-button"
+        type="primary"
+        size="large"
+        :loading="loading"
+        @click="handleRegister"
+      >
+        {{ loading ? '注册中…' : '创建账号' }}
+      </el-button>
+    </el-form>
+
+    <template #foot>
+      已有账号？<router-link class="foot-link" to="/auth/login">直接登录</router-link>
+      <span class="foot-divider" aria-hidden="true">·</span>
+      <router-link class="foot-link" to="/login">用秘钥访问</router-link>
+    </template>
+  </AuthShell>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { computed, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useUserStore } from '@/stores/user'
-import { sendCodeApi } from '@/api'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import AuthShell from '@/components/AuthShell.vue'
+import { sendCodeApi } from '@/api'
+import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
 const userStore = useUserStore()
 
+const points = [
+  { title: '自动同步', desc: '客户端每分钟上报一次，网页实时可见' },
+  { title: '历史可回看', desc: '按日期查看每一天的时长、排行与键鼠统计' },
+  { title: '隐私可控', desc: '只分享只读秘钥，随时可一键作废' }
+]
+
 const formRef = ref<FormInstance>()
 const loading = ref(false)
+const sendingCode = ref(false)
 const countdown = ref(0)
 let timer: number | null = null
 
@@ -104,11 +115,16 @@ const formData = reactive({
   confirmPassword: ''
 })
 
-const validatePassword = (rule: any, value: any, callback: any) => {
+const codeButtonText = computed(() => {
+  if (countdown.value > 0) return `${countdown.value}s 后重发`
+  return sendingCode.value ? '发送中…' : '发送验证码'
+})
+
+const validatePassword = (_rule: unknown, value: string, callback: (error?: Error) => void) => {
   if (!value) {
     callback(new Error('请输入密码'))
   } else if (value.length < 8) {
-    callback(new Error('密码至少8位'))
+    callback(new Error('密码至少 8 位'))
   } else if (!/[a-zA-Z]/.test(value) || !/[0-9]/.test(value)) {
     callback(new Error('密码必须包含字母和数字'))
   } else {
@@ -116,7 +132,7 @@ const validatePassword = (rule: any, value: any, callback: any) => {
   }
 }
 
-const validateConfirmPassword = (rule: any, value: any, callback: any) => {
+const validateConfirmPassword = (_rule: unknown, value: string, callback: (error?: Error) => void) => {
   if (!value) {
     callback(new Error('请再次输入密码'))
   } else if (value !== formData.password) {
@@ -133,103 +149,147 @@ const rules: FormRules = {
   ],
   code: [
     { required: true, message: '请输入验证码', trigger: 'blur' },
-    { len: 6, message: '验证码为6位数字', trigger: 'blur' }
+    { len: 6, message: '验证码为 6 位数字', trigger: 'blur' }
   ],
-  password: [
-    { required: true, validator: validatePassword, trigger: 'blur' }
-  ],
-  confirmPassword: [
-    { required: true, validator: validateConfirmPassword, trigger: 'blur' }
-  ]
+  password: [{ required: true, validator: validatePassword, trigger: 'blur' }],
+  confirmPassword: [{ required: true, validator: validateConfirmPassword, trigger: 'blur' }]
+}
+
+const startCountdown = () => {
+  countdown.value = 60
+  timer = window.setInterval(() => {
+    countdown.value -= 1
+    if (countdown.value <= 0 && timer) {
+      window.clearInterval(timer)
+      timer = null
+    }
+  }, 1000)
 }
 
 const handleSendCode = async () => {
   if (!formData.email) {
-    ElMessage.warning('请先输入邮箱')
+    ElMessage.warning('请先填写邮箱')
     return
   }
-  
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  if (!emailRegex.test(formData.email)) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
     ElMessage.warning('请输入正确的邮箱格式')
     return
   }
-  
+
+  sendingCode.value = true
   try {
     await sendCodeApi(formData.email)
-    ElMessage.success('验证码已发送,请查收邮件')
-    
-    // 开始倒计时
-    countdown.value = 60
-    timer = window.setInterval(() => {
-      countdown.value--
-      if (countdown.value <= 0) {
-        if (timer) clearInterval(timer)
-      }
-    }, 1000)
+    ElMessage.success('验证码已发送，请查收邮件')
+    startCountdown()
   } catch {
     // 错误提示已由请求拦截器统一弹出
+  } finally {
+    sendingCode.value = false
   }
 }
 
 const handleRegister = async () => {
   if (!formRef.value) return
-  
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return
-    
-    loading.value = true
-    try {
-      await userStore.register(formData.email, formData.password, formData.code)
-      ElMessage.success('注册成功,请登录')
-      router.push('/login')
-    } catch {
-      // 错误提示已由请求拦截器统一弹出
-    } finally {
-      loading.value = false
-    }
-  })
+  const valid = await formRef.value.validate().catch(() => false)
+  if (!valid) return
+
+  loading.value = true
+  try {
+    await userStore.register(formData.email, formData.password, formData.code)
+    ElMessage.success('注册成功，请登录')
+    router.push('/auth/login')
+  } catch {
+    // 错误提示已由请求拦截器统一弹出
+  } finally {
+    loading.value = false
+  }
 }
+
+onUnmounted(() => {
+  if (timer) {
+    window.clearInterval(timer)
+  }
+})
 </script>
 
 <style scoped>
-.register-page {
-  min-height: 100vh;
+.code-row {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  gap: var(--space-2);
+  width: 100%;
 }
 
-.register-container {
-  width: 420px;
-  padding: 40px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+.code-row :deep(.el-input) {
+  flex: 1;
 }
 
-.register-header {
-  text-align: center;
-  margin-bottom: 32px;
+/* 验证码按钮：与输入框同高同圆角，禁用时不用 opacity 压暗 */
+.code-button {
+  flex-shrink: 0;
+  min-width: 108px;
+  min-height: var(--el-component-size-large);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
 }
 
-.register-header h2 {
-  margin: 0 0 8px 0;
-  font-size: 28px;
-  color: #303133;
+.code-button:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
-.register-header p {
-  margin: 0;
-  color: #909399;
-  font-size: 14px;
+.code-button:disabled {
+  background: var(--bg-subtle);
+  border-color: var(--border);
+  color: var(--text-muted);
+  cursor: not-allowed;
 }
 
-.footer-links {
-  text-align: center;
-  margin-top: 20px;
-  color: #909399;
-  font-size: 14px;
+.submit-button {
+  width: 100%;
+  margin-top: var(--space-2);
+  font-weight: 600;
+}
+
+.foot-link {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.foot-link:hover {
+  text-decoration: underline;
+}
+
+.foot-divider {
+  color: var(--border-strong);
+  margin: 0 var(--space-1);
+}
+
+:deep(.el-form-item__label) {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  font-weight: 500;
+  padding-bottom: var(--space-2);
+}
+
+:deep(.el-form-item) {
+  margin-bottom: var(--space-4);
+}
+
+@media (max-width: 400px) {
+  .code-row {
+    flex-direction: column;
+  }
+
+  .code-button {
+    width: 100%;
+  }
 }
 </style>

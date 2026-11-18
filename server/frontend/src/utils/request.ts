@@ -34,11 +34,19 @@ service.interceptors.request.use(
   }
 )
 
+/**
+ * 扩展请求配置
+ * - ignore404: 业务码 404(如"该日期无数据")不作为错误提示，原样返回给调用方自行处理
+ */
+interface ExtendedConfig extends InternalAxiosRequestConfig {
+  ignore404?: boolean
+}
+
 // 响应拦截器: 直接返回ApiResponse对象(而不是AxiosResponse)
 service.interceptors.response.use(
   (response) => {
     const res = response.data as ApiResponse
-    const config = response.config as InternalAxiosRequestConfig & { ignore404?: boolean }
+    const config = response.config as ExtendedConfig
 
     // 如果返回的状态码为200/201,直接返回数据
     if (res.code === 200 || res.code === 201) {
@@ -57,7 +65,17 @@ service.interceptors.response.use(
     return Promise.reject(err)
   },
   (error) => {
-    // 处理HTTP错误
+    const config = error.config as ExtendedConfig | undefined
+    const payload = error.response?.data as ApiResponse | undefined
+
+    // HTTP 404 且调用方声明忽略：后端用 HTTP 404 + {code:404} 表达"该日期无数据"，
+    // 属于正常空状态，这里走成功分支原样返回，避免弹出无意义的错误提示
+    if (error.response?.status === 404 && config?.ignore404) {
+      return payload
+        ? (payload as unknown as AxiosResponse)
+        : ({ code: 404, message: '该日期无数据', data: null } as unknown as AxiosResponse)
+    }
+
     if (error.response) {
       const status = error.response.status
       switch (status) {
@@ -71,13 +89,16 @@ service.interceptors.response.use(
           ElMessage.error('无权限访问')
           break
         case 404:
-          ElMessage.error('请求的资源不存在')
+          ElMessage.error(payload?.message || '请求的资源不存在')
+          break
+        case 503:
+          ElMessage.error(payload?.message || '服务暂时不可用，请稍后重试')
           break
         case 500:
-          ElMessage.error('服务器错误')
+          ElMessage.error(payload?.message || '服务器错误')
           break
         default:
-          ElMessage.error(error.response.data?.message || '请求失败')
+          ElMessage.error(payload?.message || '请求失败')
       }
     } else {
       ElMessage.error('网络错误,请检查网络连接')
@@ -87,13 +108,6 @@ service.interceptors.response.use(
 )
 
 /**
- * 扩展请求配置: ignore404 表示 404 业务码(如"该日期无数据")不作为错误提示
- */
-export interface RequestConfig extends AxiosRequestConfig {
-  ignore404?: boolean
-}
-
-/**
  * 类型化请求客户端
  *
  * 由于响应拦截器直接返回了 ApiResponse(而非 AxiosResponse)，
@@ -101,10 +115,10 @@ export interface RequestConfig extends AxiosRequestConfig {
  * 从而 res.data 直接是业务数据类型。
  */
 const request = {
-  get<T = unknown>(url: string, config?: RequestConfig): Promise<T> {
+  get<T = unknown>(url: string, config?: AxiosRequestConfig & { ignore404?: boolean }): Promise<T> {
     return service.get(url, config as AxiosRequestConfig) as unknown as Promise<T>
   },
-  post<T = unknown>(url: string, data?: unknown, config?: RequestConfig): Promise<T> {
+  post<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig & { ignore404?: boolean }): Promise<T> {
     return service.post(url, data, config as AxiosRequestConfig) as unknown as Promise<T>
   }
 }

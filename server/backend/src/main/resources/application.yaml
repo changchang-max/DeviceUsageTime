@@ -27,7 +27,7 @@ spring:
   # mysql配置
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:deviceusagetime}?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:deviceusagetime}?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
     username: ${MYSQL_USER}
     password: ${MYSQL_PASSWORD}
 
@@ -44,8 +44,53 @@ logging:
   file:
     name: logs/backend.log
   level:
-    org.springframework.security: DEBUG
+    # 逐请求的 DEBUG 日志量极大，生产只保留 WARN
+    org.springframework.security: ${LOG_LEVEL_SECURITY:WARN}
+    top.primordialcode.backend: ${LOG_LEVEL_APP:INFO}
+  logback:
+    rollingpolicy:
+      max-file-size: 20MB
+      max-history: 14
 
+# JWT
 jwt:
   secret: ${JWT_SECRET}
   expiration: ${JWT_EXPIRATION}
+
+# 本地缓存(Caffeine)
+cache:
+  max-size: ${CACHE_MAX_SIZE:10000}
+
+# 实时推送
+realtime:
+  # memory: 单机内存订阅表；redis: Redis Pub/Sub 跨实例广播(多实例部署必选)
+  broker: ${REALTIME_BROKER:memory}
+  # 超过该时长(秒)未收到客户端消息(含 ping)即回收连接
+  idle-timeout-seconds: ${REALTIME_IDLE_TIMEOUT:180}
+  idle-evict:
+    enabled: true
+
+# 秘钥校验限流(防止秘钥被暴力枚举)
+security:
+  key-verify:
+    max-failures: ${KEY_VERIFY_MAX_FAILURES:10}
+    window-seconds: ${KEY_VERIFY_WINDOW:60}
+
+# 跨域：生产同域反代可置空，本地开发放行 vite 端口
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000}
+
+# 监控端点：只暴露只读的健康与指标
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# 启动期清理旧版本遗留的无日期 Redis key
+redis:
+  legacy-cleanup:
+    enabled: true

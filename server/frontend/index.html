@@ -4,7 +4,15 @@
     <meta charset="UTF-8">
     <link rel="icon" href="/favicon.ico">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>设备使用时间追踪系统</title>
+    <meta name="description" content="设备使用时间追踪 · 查看每天用了多久、用得最多的是什么">
+    <meta name="theme-color" content="#fafaf9" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0f1418" media="(prefers-color-scheme: dark)">
+    <title>设备使用时间</title>
+    <style>
+      /* 首屏防闪白：在样式包加载前就铺上页面底色 */
+      html { background: #fafaf9; }
+      @media (prefers-color-scheme: dark) { html { background: #0f1418; } }
+    </style>
   </head>
   <body>
     <div id="app"></div>

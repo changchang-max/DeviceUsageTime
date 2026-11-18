@@ -14,6 +14,10 @@ dist-ssr
 coverage
 *.local
 
+# 本地构建/预览临时目录(Windows 下 esbuild 会占用，禁止入库)
+.tmp-esbuild
+.shots
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

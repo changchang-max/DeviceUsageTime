@@ -1,4 +1,5 @@
 // 通用响应类型
+// data 允许为 null：后端在"该日期无数据"(404)等空状态下会返回 null
 export interface ApiResponse<T = any> {
   success?: boolean
   code: number

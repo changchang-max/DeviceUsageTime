@@ -3,6 +3,7 @@ package top.primordialcode.backend.service.Data;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -14,27 +15,29 @@ import top.primordialcode.backend.entity.UserAuthEntity;
 import top.primordialcode.backend.exception.DataNotFoundException;
 import top.primordialcode.backend.exception.UserNotFoundException;
 import top.primordialcode.backend.mapper.HistoryDataMapper;
-import top.primordialcode.backend.mapper.UserAuthMapper;
 import top.primordialcode.backend.service.Redis.RedisDataUploadServer;
 import top.primordialcode.backend.utils.JwtTokenUtil;
+import top.primordialcode.backend.utils.RateLimiterUtil;
+import top.primordialcode.backend.utils.UserLookupCache;
 import top.primordialcode.backend.vo.data.HistoryApplicationVO;
 import top.primordialcode.backend.vo.data.HistoryDataVO;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("历史数据查询服务测试")
 class DataQueryServerTest {
 
     @Mock
-    private UserAuthMapper userAuthMapper;
+    private UserLookupCache userLookupCache;
 
     @Mock
     private RedisDataUploadServer redisDataUploadServer;
@@ -45,6 +48,9 @@ class DataQueryServerTest {
     @Mock
     private HistoryDataMapper historyDataMapper;
 
+    @Mock
+    private RateLimiterUtil rateLimiterUtil;
+
     @InjectMocks
     private DataQueryServer dataQueryServer;
 
@@ -52,6 +58,14 @@ class DataQueryServerTest {
     private final String authorization = "Bearer valid-token";
     private final String dateStr = "2026-07-12";
     private final LocalDate date = LocalDate.of(2026, 7, 12);
+    private final String clientIp = "127.0.0.1";
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUpRateLimiter() {
+        // 默认放行；个别用例会覆盖为"超限"
+        lenient().when(rateLimiterUtil.tryAcquire(anyString(), anyString(), anyInt(), any(Duration.class)))
+                .thenReturn(true);
+    }
 
     private DailyStatisticsEntity statisticsEntity() {
         DailyStatisticsEntity entity = new DailyStatisticsEntity();
@@ -82,10 +96,10 @@ class DataQueryServerTest {
     }
 
     @Test
-    @DisplayName("Token认证成功返回完整历史数据")
+    @DisplayName("Token认证成功返回完整历史数据(含窗口标题)")
     void testGetHistoryDataSuccessByToken() {
         when(jwtTokenUtil.getSubject(authorization)).thenReturn(email);
-        when(userAuthMapper.existsByEmail(email)).thenReturn(true);
+        when(userLookupCache.existsByEmail(email)).thenReturn(true);
         when(historyDataMapper.selectDailyStatistics(email, date)).thenReturn(statisticsEntity());
 
         List<AppUsageRecordEntity> records = Arrays.asList(
@@ -99,7 +113,7 @@ class DataQueryServerTest {
                 windowTitle(11L, "main.py"),
                 windowTitle(11L, "app.js")));
 
-        HistoryDataVO vo = dataQueryServer.getHistoryData(authorization, null, dateStr);
+        HistoryDataVO vo = dataQueryServer.getHistoryData(authorization, null, clientIp, dateStr, true);
 
         assertEquals(dateStr, vo.getDate());
 
@@ -126,34 +140,50 @@ class DataQueryServerTest {
     }
 
     @Test
+    @DisplayName("默认不返回窗口标题(懒加载)，且不查询标题表")
+    void testGetHistoryDataWithoutTitles() {
+        when(jwtTokenUtil.getSubject(authorization)).thenReturn(email);
+        when(userLookupCache.existsByEmail(email)).thenReturn(true);
+        when(historyDataMapper.selectDailyStatistics(email, date)).thenReturn(statisticsEntity());
+        when(historyDataMapper.selectAppRecords(email, date))
+                .thenReturn(List.of(appRecord(10L, "Chrome", 10800L, 5L)));
+
+        HistoryDataVO vo = dataQueryServer.getHistoryData(authorization, null, clientIp, dateStr, false);
+
+        assertEquals(1, vo.getApplications().size());
+        assertTrue(vo.getApplications().get(0).getWindowTitles().isEmpty());
+        verify(historyDataMapper, never()).selectTitlesByRecordIds(anyList());
+    }
+
+    @Test
     @DisplayName("秘钥认证成功返回历史数据")
     void testGetHistoryDataSuccessByKey() {
         String key = "aB3$xY9zK2mN7pQ";
-        UserAuthEntity user = new UserAuthEntity();
-        user.setUser_email(email);
-        when(userAuthMapper.selectByKey(key)).thenReturn(user);
-        when(userAuthMapper.existsByEmail(email)).thenReturn(true);
+        when(userLookupCache.resolveEmailByKey(key)).thenReturn(email);
+        when(userLookupCache.existsByEmail(email)).thenReturn(true);
         when(historyDataMapper.selectDailyStatistics(email, date)).thenReturn(null);
         when(historyDataMapper.selectAppRecords(email, date))
                 .thenReturn(List.of(appRecord(10L, "Chrome", 10800L, 5L)));
         when(historyDataMapper.selectTitlesByRecordIds(anyList()))
                 .thenReturn(List.of(windowTitle(10L, "Google搜索")));
 
-        HistoryDataVO vo = dataQueryServer.getHistoryData(null, key, dateStr);
+        HistoryDataVO vo = dataQueryServer.getHistoryData(null, key, clientIp, dateStr, true);
 
         assertEquals(1, vo.getApplications().size());
         assertEquals("Chrome", vo.getApplications().get(0).getName());
+        // 成功后应重置限流计数
+        verify(rateLimiterUtil).reset(eq("key-verify"), anyString());
     }
 
     @Test
     @DisplayName("应用无数据但统计存在时返回空应用列表")
     void testGetHistoryDataStatisticsOnly() {
         when(jwtTokenUtil.getSubject(authorization)).thenReturn(email);
-        when(userAuthMapper.existsByEmail(email)).thenReturn(true);
+        when(userLookupCache.existsByEmail(email)).thenReturn(true);
         when(historyDataMapper.selectDailyStatistics(email, date)).thenReturn(statisticsEntity());
         when(historyDataMapper.selectAppRecords(email, date)).thenReturn(List.of());
 
-        HistoryDataVO vo = dataQueryServer.getHistoryData(authorization, null, dateStr);
+        HistoryDataVO vo = dataQueryServer.getHistoryData(authorization, null, clientIp, dateStr, false);
 
         assertTrue(vo.getApplications().isEmpty());
         assertEquals(15000L, vo.getStatistics().getKeyboardCount());
@@ -163,13 +193,12 @@ class DataQueryServerTest {
     @DisplayName("有应用数据但无统计行时返回全0统计")
     void testGetHistoryDataFillZeroStatistics() {
         when(jwtTokenUtil.getSubject(authorization)).thenReturn(email);
-        when(userAuthMapper.existsByEmail(email)).thenReturn(true);
+        when(userLookupCache.existsByEmail(email)).thenReturn(true);
         when(historyDataMapper.selectDailyStatistics(email, date)).thenReturn(null);
         when(historyDataMapper.selectAppRecords(email, date))
                 .thenReturn(List.of(appRecord(10L, "Chrome", 10800L, 5L)));
-        when(historyDataMapper.selectTitlesByRecordIds(anyList())).thenReturn(List.of());
 
-        HistoryDataVO vo = dataQueryServer.getHistoryData(authorization, null, dateStr);
+        HistoryDataVO vo = dataQueryServer.getHistoryData(authorization, null, clientIp, dateStr, false);
 
         assertEquals(1, vo.getApplications().size());
         assertEquals(0L, vo.getStatistics().getKeyboardCount());
@@ -181,28 +210,28 @@ class DataQueryServerTest {
     @DisplayName("该日期无任何数据时抛出DataNotFoundException")
     void testGetHistoryDataNoData() {
         when(jwtTokenUtil.getSubject(authorization)).thenReturn(email);
-        when(userAuthMapper.existsByEmail(email)).thenReturn(true);
+        when(userLookupCache.existsByEmail(email)).thenReturn(true);
         when(historyDataMapper.selectDailyStatistics(email, date)).thenReturn(null);
         when(historyDataMapper.selectAppRecords(email, date)).thenReturn(List.of());
 
         assertThrows(DataNotFoundException.class,
-                () -> dataQueryServer.getHistoryData(authorization, null, dateStr));
+                () -> dataQueryServer.getHistoryData(authorization, null, clientIp, dateStr, false));
     }
 
     @Test
     @DisplayName("日期格式错误抛出IllegalArgumentException")
     void testGetHistoryDataInvalidDate() {
         when(jwtTokenUtil.getSubject(authorization)).thenReturn(email);
-        when(userAuthMapper.existsByEmail(email)).thenReturn(true);
+        when(userLookupCache.existsByEmail(email)).thenReturn(true);
 
         assertThrows(IllegalArgumentException.class,
-                () -> dataQueryServer.getHistoryData(authorization, null, "2026-7-1"));
+                () -> dataQueryServer.getHistoryData(authorization, null, clientIp, "2026-7-1", false));
         assertThrows(IllegalArgumentException.class,
-                () -> dataQueryServer.getHistoryData(authorization, null, "2026-13-01"));
+                () -> dataQueryServer.getHistoryData(authorization, null, clientIp, "2026-13-01", false));
         assertThrows(IllegalArgumentException.class,
-                () -> dataQueryServer.getHistoryData(authorization, null, "abcdef"));
+                () -> dataQueryServer.getHistoryData(authorization, null, clientIp, "abcdef", false));
         assertThrows(IllegalArgumentException.class,
-                () -> dataQueryServer.getHistoryData(authorization, null, null));
+                () -> dataQueryServer.getHistoryData(authorization, null, clientIp, null, false));
     }
 
     @Test
@@ -211,25 +240,82 @@ class DataQueryServerTest {
         when(jwtTokenUtil.getSubject(authorization)).thenThrow(new RuntimeException("token expired"));
 
         assertThrows(SecurityException.class,
-                () -> dataQueryServer.getHistoryData(authorization, null, dateStr));
+                () -> dataQueryServer.getHistoryData(authorization, null, clientIp, dateStr, false));
     }
 
     @Test
-    @DisplayName("秘钥无效抛出SecurityException")
+    @DisplayName("秘钥无效抛出SecurityException(不再明文记录秘钥)")
     void testGetHistoryDataInvalidKey() {
-        when(userAuthMapper.selectByKey("bad-key")).thenReturn(null);
+        when(userLookupCache.resolveEmailByKey("bad-key")).thenReturn(null);
 
         assertThrows(SecurityException.class,
-                () -> dataQueryServer.getHistoryData(null, "bad-key", dateStr));
+                () -> dataQueryServer.getHistoryData(null, "bad-key", clientIp, dateStr, false));
+    }
+
+    @Test
+    @DisplayName("秘钥校验超过限流阈值抛出SecurityException且不查缓存")
+    void testGetHistoryDataRateLimited() {
+        when(rateLimiterUtil.tryAcquire(anyString(), anyString(), anyInt(), any(Duration.class)))
+                .thenReturn(false);
+
+        assertThrows(SecurityException.class,
+                () -> dataQueryServer.getHistoryData(null, "some-key", clientIp, dateStr, false));
+        verify(userLookupCache, never()).resolveEmailByKey(anyString());
     }
 
     @Test
     @DisplayName("用户不存在抛出UserNotFoundException")
     void testGetHistoryDataUserNotExist() {
         when(jwtTokenUtil.getSubject(authorization)).thenReturn(email);
-        when(userAuthMapper.existsByEmail(email)).thenReturn(false);
+        when(userLookupCache.existsByEmail(email)).thenReturn(false);
 
         assertThrows(UserNotFoundException.class,
-                () -> dataQueryServer.getHistoryData(authorization, null, dateStr));
+                () -> dataQueryServer.getHistoryData(authorization, null, clientIp, dateStr, false));
+    }
+
+    @Test
+    @DisplayName("实时数据读取一次快照并按应用时长降序返回")
+    void testGetRealtimeDataSortsApplications() {
+        when(jwtTokenUtil.getSubject(authorization)).thenReturn(email);
+        when(userLookupCache.existsByEmail(email)).thenReturn(true);
+
+        top.primordialcode.backend.dto.DataUpload.ApplicationDTO shortApp =
+                new top.primordialcode.backend.dto.DataUpload.ApplicationDTO();
+        shortApp.setName("VSCode");
+        shortApp.setDuration(600L);
+        shortApp.setIsActive(false);
+
+        top.primordialcode.backend.dto.DataUpload.ApplicationDTO longApp =
+                new top.primordialcode.backend.dto.DataUpload.ApplicationDTO();
+        longApp.setName("Chrome");
+        longApp.setDuration(3600L);
+        longApp.setIsActive(true);
+
+        RedisDataUploadServer.Snapshot snapshot = new RedisDataUploadServer.Snapshot();
+        snapshot.setApplications(Arrays.asList(shortApp, longApp));
+        when(redisDataUploadServer.readSnapshot(eq(email), any(LocalDate.class))).thenReturn(snapshot);
+
+        var vo = dataQueryServer.getRealtimeData(authorization, null, clientIp);
+
+        assertEquals(email, vo.getUserId());
+        assertEquals(2, vo.getApplications().size());
+        assertEquals("Chrome", vo.getApplications().get(0).getName());
+        // 只读一次快照，不再分别读 applications/statistics/otherData
+        ArgumentCaptor<LocalDate> captor = ArgumentCaptor.forClass(LocalDate.class);
+        verify(redisDataUploadServer, times(1)).readSnapshot(eq(email), captor.capture());
+    }
+
+    @Test
+    @DisplayName("窗口标题懒加载接口按应用返回标题")
+    void testGetWindowTitles() {
+        when(jwtTokenUtil.getSubject(authorization)).thenReturn(email);
+        when(historyDataMapper.selectAppRecord(email, date, "Chrome"))
+                .thenReturn(appRecord(10L, "Chrome", 10800L, 5L));
+        when(historyDataMapper.selectTitlesByRecordIds(List.of(10L)))
+                .thenReturn(List.of(windowTitle(10L, "GitHub")));
+
+        List<String> titles = dataQueryServer.getWindowTitles(authorization, null, clientIp, dateStr, "Chrome");
+
+        assertEquals(List.of("GitHub"), titles);
     }
 }

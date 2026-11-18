@@ -1,55 +1,76 @@
 <template>
-  <div class="calendar-component">
-    <div class="calendar-header">
-      <el-button
-        :icon="ArrowLeft"
-        circle
-        @click="prevMonth"
-      />
-      <span class="current-month">{{ currentYearMonth }}</span>
-      <el-button
-        :icon="ArrowRight"
-        circle
-        @click="nextMonth"
-      />
-    </div>
-    
+  <section class="calendar">
+    <header class="calendar-head">
+      <button
+        type="button"
+        class="nav-button"
+        aria-label="上个月"
+        @click="shiftMonth(-1)"
+      >
+        <el-icon><ArrowLeft /></el-icon>
+      </button>
+
+      <div class="month-label">
+        <h2 class="month-title">{{ currentYearLabel }}</h2>
+        <span class="month-sub">{{ currentYearMonth }}</span>
+      </div>
+
+      <button
+        type="button"
+        class="nav-button"
+        aria-label="下个月"
+        @click="shiftMonth(1)"
+      >
+        <el-icon><ArrowRight /></el-icon>
+      </button>
+    </header>
+
     <div class="quick-actions">
-      <el-button size="small" @click="selectToday">今天</el-button>
-      <el-button size="small" @click="selectYesterday">昨天</el-button>
+      <button type="button" class="chip" :class="{ 'is-current': selectedDate === todayKey }" @click="selectDate(todayKey)">
+        今天
+      </button>
+      <button type="button" class="chip" @click="selectDate(yesterdayKey)">
+        昨天
+      </button>
+      <button type="button" class="chip" @click="jumpToLatest">
+        最近有数据
+      </button>
     </div>
-    
-    <div class="calendar-grid">
-      <div class="weekday-header">
-        <div v-for="day in weekdays" :key="day" class="weekday">
-          {{ day }}
-        </div>
-      </div>
-      
-      <div class="dates-grid">
-        <div
-          v-for="date in calendarDates"
-          :key="date.dateString"
-          class="date-cell"
-          :class="{
-            'other-month': !date.isCurrentMonth,
-            'has-data': date.hasData,
-            'selected': date.dateString === selectedDate,
-            'today': date.isToday
-          }"
-          @click="selectDate(date)"
-        >
-          <span class="date-number">{{ date.day }}</span>
-          <span v-if="date.hasData" class="data-dot"></span>
-        </div>
-      </div>
+
+    <div class="weekdays" aria-hidden="true">
+      <span v-for="day in WEEKDAYS" :key="day">{{ day }}</span>
     </div>
-  </div>
+
+    <div class="dates" role="grid" :aria-label="`${currentYearLabel} 日期选择`">
+      <button
+        v-for="date in calendarDates"
+        :key="date.dateString"
+        type="button"
+        role="gridcell"
+        class="date-cell"
+        :class="{
+          'is-outside': !date.isCurrentMonth,
+          'is-today': date.isToday,
+          'is-selected': date.dateString === selectedDate,
+          'has-data': date.hasData
+        }"
+        :disabled="!date.isCurrentMonth || date.isFuture"
+        :aria-current="date.isToday ? 'date' : undefined"
+        :aria-selected="date.dateString === selectedDate"
+        :aria-label="dateLabel(date)"
+        @click="selectDate(date.dateString)"
+      >
+        <span class="date-number tabular">{{ date.day }}</span>
+        <span v-if="date.hasData" class="data-dot" aria-hidden="true"></span>
+      </button>
+    </div>
+  </section>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { toLocalDateKey } from '@/utils/format'
 
 interface CalendarDate {
   dateString: string
@@ -57,243 +78,308 @@ interface CalendarDate {
   isCurrentMonth: boolean
   hasData: boolean
   isToday: boolean
+  isFuture: boolean
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
+  /** 有数据记录的日期列表(YYYY-MM-DD) */
   dataDates?: string[]
+  /** 当前选中日期(YYYY-MM-DD) */
   modelValue?: string
-}>()
+}>(), {
+  dataDates: () => [],
+  modelValue: ''
+})
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]
   'date-change': [date: string]
 }>()
 
-const currentDate = ref(new Date())
-const selectedDate = ref(props.modelValue || '')
-const weekdays = ['日', '一', '二', '三', '四', '五', '六']
+const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日']
 
-const currentYearMonth = computed(() => {
-  const year = currentDate.value.getFullYear()
-  const month = (currentDate.value.getMonth() + 1).toString().padStart(2, '0')
-  return `${year}年${month}月`
-})
+const todayKey = toLocalDateKey()
+const yesterdayKey = (() => {
+  const d = new Date()
+  d.setDate(d.getDate() - 1)
+  return toLocalDateKey(d)
+})()
+
+const cursor = ref(new Date())
+const selectedDate = ref(props.modelValue || todayKey)
+
+const currentYearLabel = computed(() => `${cursor.value.getFullYear()} 年 ${cursor.value.getMonth() + 1} 月`)
+
+const currentYearMonth = computed(
+  () => `${cursor.value.getFullYear()}-${String(cursor.value.getMonth() + 1).padStart(2, '0')}`
+)
+
+// 数据集转 Set，避免每个格子都 includes 扫一遍
+const dataDateSet = computed(() => new Set(props.dataDates))
 
 const calendarDates = computed<CalendarDate[]>(() => {
-  const year = currentDate.value.getFullYear()
-  const month = currentDate.value.getMonth()
-  
+  const year = cursor.value.getFullYear()
+  const month = cursor.value.getMonth()
   const firstDay = new Date(year, month, 1)
-  const lastDay = new Date(year, month + 1, 0)
-  const firstDayOfWeek = firstDay.getDay()
-  
+  // 周一为一周第一天：JS getDay() 周日为 0，这里换算成 0=周一
+  const leading = (firstDay.getDay() + 6) % 7
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const daysInPrevMonth = new Date(year, month, 0).getDate()
+
   const dates: CalendarDate[] = []
-  
-  // 上个月的日期
-  const prevMonthLastDay = new Date(year, month, 0).getDate()
-  for (let i = firstDayOfWeek - 1; i >= 0; i--) {
-    const day = prevMonthLastDay - i
-    const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+
+  for (let i = leading - 1; i >= 0; i -= 1) {
+    const day = daysInPrevMonth - i
     dates.push({
-      dateString,
+      dateString: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
       day,
       isCurrentMonth: false,
       hasData: false,
-      isToday: false
+      isToday: false,
+      isFuture: false
     })
   }
-  
-  // 当月的日期
-  const today = new Date()
-  const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-  
-  for (let day = 1; day <= lastDay.getDate(); day++) {
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
     const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
     dates.push({
       dateString,
       day,
       isCurrentMonth: true,
-      hasData: props.dataDates?.includes(dateString) || false,
-      isToday: dateString === todayString
+      hasData: dataDateSet.value.has(dateString),
+      isToday: dateString === todayKey,
+      isFuture: dateString > todayKey
     })
   }
-  
-  // 下个月的日期(补齐6行)
-  const remainingDays = 42 - dates.length
-  for (let day = 1; day <= remainingDays; day++) {
-    const dateString = `${year}-${String(month + 2).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+
+  // 补齐到 6 行(42 格)，保证月份切换时高度不跳动
+  let nextMonthDay = 1
+  while (dates.length < 42) {
+    const dateString = `${month === 11 ? year + 1 : year}-${String(((month + 1) % 12) + 1).padStart(2, '0')}-${String(nextMonthDay).padStart(2, '0')}`
     dates.push({
       dateString,
-      day,
+      day: nextMonthDay,
       isCurrentMonth: false,
       hasData: false,
-      isToday: false
+      isToday: false,
+      isFuture: true
     })
+    nextMonthDay += 1
   }
-  
+
   return dates
 })
 
-const selectDate = (date: CalendarDate) => {
-  if (!date.isCurrentMonth) return
-  selectedDate.value = date.dateString
-  emit('update:modelValue', date.dateString)
-  emit('date-change', date.dateString)
+const dateLabel = (date: CalendarDate): string => {
+  const base = `${date.dateString}${date.isToday ? ' 今天' : ''}`
+  return date.hasData ? `${base}，有数据` : `${base}，无数据`
 }
 
-const prevMonth = () => {
-  currentDate.value = new Date(
-    currentDate.value.getFullYear(),
-    currentDate.value.getMonth() - 1,
-    1
-  )
+const selectDate = (dateString: string) => {
+  if (dateString > todayKey) return
+  selectedDate.value = dateString
+  // 选中其他月份时同步切换日历视图
+  const [y, m] = dateString.split('-').map(Number)
+  if (y !== cursor.value.getFullYear() || m - 1 !== cursor.value.getMonth()) {
+    cursor.value = new Date(y, m - 1, 1)
+  }
+  emit('update:modelValue', dateString)
+  emit('date-change', dateString)
 }
 
-const nextMonth = () => {
-  currentDate.value = new Date(
-    currentDate.value.getFullYear(),
-    currentDate.value.getMonth() + 1,
-    1
-  )
+const shiftMonth = (delta: number) => {
+  cursor.value = new Date(cursor.value.getFullYear(), cursor.value.getMonth() + delta, 1)
 }
 
-const selectToday = () => {
-  const today = new Date()
-  currentDate.value = today
-  const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-  selectDate({
-    dateString: todayString,
-    day: today.getDate(),
-    isCurrentMonth: true,
-    hasData: false,
-    isToday: true
-  })
+// 跳到最近一个有数据的日期(本月内)
+const jumpToLatest = () => {
+  const latest = [...props.dataDates].sort().reverse().find((date) => date <= todayKey)
+  if (!latest) return
+  selectDate(latest)
 }
 
-const selectYesterday = () => {
-  const yesterday = new Date()
-  yesterday.setDate(yesterday.getDate() - 1)
-  currentDate.value = yesterday
-  const yesterdayString = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`
-  selectDate({
-    dateString: yesterdayString,
-    day: yesterday.getDate(),
-    isCurrentMonth: true,
-    hasData: false,
-    isToday: false
-  })
-}
-
-watch(() => props.modelValue, (newVal) => {
-  if (newVal) selectedDate.value = newVal
-})
-
-onMounted(() => {
-  if (!selectedDate.value) {
-    selectToday()
+watch(() => props.modelValue, (value) => {
+  if (value && value !== selectedDate.value) {
+    selectedDate.value = value
   }
 })
 </script>
 
 <style scoped>
-.calendar-component {
-  background: #fff;
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+.calendar {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-5);
 }
 
-.calendar-header {
+.calendar-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
 }
 
-.current-month {
-  font-size: 18px;
+.month-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.month-title {
+  font-size: var(--text-base);
   font-weight: 600;
-  color: #303133;
+}
+
+.month-sub {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 导航按钮：44×44 触控目标 */
+.nav-button {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.nav-button:hover {
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 .quick-actions {
   display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
 }
 
-.weekday-header {
+.chip {
+  min-height: 28px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-1);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.chip:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.chip.is-current {
+  background: var(--primary-soft);
+  border-color: transparent;
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.weekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
-  margin-bottom: 8px;
+  gap: var(--space-1);
+  margin-bottom: var(--space-2);
 }
 
-.weekday {
+.weekdays span {
   text-align: center;
-  font-size: 14px;
-  color: #909399;
-  padding: 8px 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
 }
 
-.dates-grid {
+.dates {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .date-cell {
+  position: relative;
   aspect-ratio: 1;
+  min-height: 36px;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
-  cursor: pointer;
-  position: relative;
-  transition: all 0.2s;
-}
-
-.date-cell:hover {
-  background: #f5f7fa;
-}
-
-.date-cell.other-month {
-  color: #c0c4cc;
-  cursor: not-allowed;
-}
-
-.date-cell.other-month:hover {
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
 }
 
-.date-cell.has-data {
+.date-cell:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.date-cell.is-outside {
+  color: var(--border-strong);
+}
+
+.date-cell.is-outside,
+.date-cell:disabled {
+  cursor: default;
+}
+
+.date-cell.is-today {
+  border-color: var(--primary);
+  color: var(--primary);
   font-weight: 600;
 }
 
-.date-cell.selected {
-  background: #409eff;
-  color: #fff;
+.date-cell.is-selected {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--text-on-primary);
+  font-weight: 600;
 }
 
-.date-cell.today {
-  border: 2px solid #409eff;
-}
-
-.date-number {
-  font-size: 14px;
+.date-cell.has-data .date-number {
+  font-weight: 600;
 }
 
 .data-dot {
-  width: 6px;
-  height: 6px;
-  background: #67c23a;
-  border-radius: 50%;
   position: absolute;
   bottom: 4px;
+  width: 4px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--primary);
 }
 
-.date-cell.selected .data-dot {
-  background: #fff;
+.date-cell.is-selected .data-dot {
+  background: var(--text-on-primary);
+}
+
+@media (max-width: 640px) {
+  .calendar {
+    padding: var(--space-4);
+  }
+
+  .date-cell {
+    min-height: 32px;
+    font-size: var(--text-xs);
+  }
 }
 </style>

@@ -1,121 +1,123 @@
 <template>
-  <div class="stats-card" :class="type">
-    <div class="icon-wrapper">
-      <el-icon :size="28" class="icon">
-        <component :is="iconComponent" />
-      </el-icon>
-    </div>
-    <div class="content">
-      <div class="label">{{ label }}</div>
-      <div class="value">{{ formattedValue }}</div>
+  <!-- 统计小卡片：键盘 / 鼠标点击 / 移动距离，三宫格复用 -->
+  <div class="stat-cell">
+    <span class="stat-icon" :style="{ color: tone.color, background: tone.soft }" aria-hidden="true">
+      <el-icon :size="16"><component :is="icon" /></el-icon>
+    </span>
+    <div class="stat-body">
+      <span class="stat-label">{{ label }}</span>
+      <span v-if="loading" class="stat-skeleton" aria-hidden="true"></span>
+      <span v-else class="stat-value tabular">
+        {{ value }}<span v-if="unit" class="stat-unit">{{ unit }}</span>
+      </span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Edit, Mouse as MouseIcon, Position } from '@element-plus/icons-vue'
-import { formatNumber, formatDistance } from '@/utils/format'
+import { EditPen, Mouse as MouseIcon, Position } from '@element-plus/icons-vue'
+import { formatNumber } from '@/utils/format'
 
-const props = defineProps<{
-  type: 'keyboard' | 'mouse-click' | 'mouse-distance'
+type StatType = 'keyboard' | 'mouse-click' | 'mouse-distance'
+
+const props = withDefaults(defineProps<{
+  type: StatType
+  /** 原始数值(次数或米) */
   value: number
+  /** 已格式化好的展示文本 */
+  displayValue: string
+  /** 单位(次 / km 等)，可为空 */
+  unit?: string
+  /** 标签 */
   label: string
-}>()
-
-const iconComponent = computed(() => {
-  switch (props.type) {
-    case 'keyboard':
-      return Edit
-    case 'mouse-click':
-      return MouseIcon
-    case 'mouse-distance':
-      return Position
-    default:
-      return Edit
-  }
+  /** 是否加载中 */
+  loading?: boolean
+}>(), {
+  unit: '',
+  loading: false
 })
 
-const formattedValue = computed(() => {
-  switch (props.type) {
-    case 'keyboard':
-    case 'mouse-click':
-      return formatNumber(props.value) + '次'
-    case 'mouse-distance':
-      return formatDistance(props.value)
-    default:
-      return String(props.value)
+const ICONS: Record<StatType, unknown> = {
+  keyboard: EditPen,
+  'mouse-click': MouseIcon,
+  'mouse-distance': Position
+}
+
+const TONES: Record<StatType, { color: string; soft: string }> = {
+  keyboard: { color: 'var(--primary)', soft: 'var(--primary-soft)' },
+  'mouse-click': { color: 'var(--secondary)', soft: 'var(--secondary-soft)' },
+  'mouse-distance': { color: 'var(--info)', soft: 'var(--info-soft)' }
+}
+
+const icon = computed(() => ICONS[props.type])
+const tone = computed(() => TONES[props.type])
+
+// 便于测试与外部复用的格式化出口
+const formatted = computed(() => {
+  if (props.type === 'mouse-distance') {
+    return props.displayValue
   }
+  return formatNumber(props.value)
 })
 </script>
 
 <style scoped>
-.stats-card {
+.stat-cell {
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding: 24px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  transition: transform 0.2s, box-shadow 0.2s;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: border-color var(--duration-fast) var(--ease-out);
 }
 
-.stats-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+.stat-cell:hover {
+  border-color: var(--border-strong);
 }
 
-.icon-wrapper {
-  width: 56px;
-  height: 56px;
-  border-radius: 12px;
-  display: flex;
+.stat-icon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  border-radius: var(--radius-sm);
 }
 
-.stats-card.keyboard .icon-wrapper {
-  background: #e8f4ff;
+.stat-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
-.stats-card.mouse-click .icon-wrapper {
-  background: #e8f8f0;
+.stat-label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
 }
 
-.stats-card.mouse-distance .icon-wrapper {
-  background: #fef0e8;
+.stat-value {
+  font-size: var(--text-lg);
+  font-weight: 650;
+  color: var(--text);
+  line-height: 1.25;
 }
 
-.icon {
-  font-size: 28px;
+.stat-unit {
+  margin-left: 2px;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text-muted);
 }
 
-.stats-card.keyboard .icon {
-  color: #409eff;
-}
-
-.stats-card.mouse-click .icon {
-  color: #67c23a;
-}
-
-.stats-card.mouse-distance .icon {
-  color: #e6a23c;
-}
-
-.content {
-  flex: 1;
-}
-
-.label {
-  font-size: 14px;
-  color: #909399;
-  margin-bottom: 8px;
-}
-
-.value {
-  font-size: 24px;
-  font-weight: 600;
-  color: #303133;
+.stat-skeleton {
+  width: 64px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--surface-2);
 }
 </style>
