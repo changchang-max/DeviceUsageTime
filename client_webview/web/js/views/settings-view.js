@@ -42,6 +42,7 @@ export function initSettingsView({ refresh }) {
   els.loginForm = $("#login-form");
   els.loginBtn = $("#btn-login");
   els.logoutBtn = $("#btn-logout");
+  els.forgotBtn = $("#btn-forgot-password");
   els.statusCard = $("#account-status");
   els.statusText = $("#account-status-text");
 
@@ -89,6 +90,7 @@ export function initSettingsView({ refresh }) {
   // 登录表单
   els.loginForm.addEventListener("submit", handleLogin);
   els.logoutBtn.addEventListener("click", handleLogout);
+  els.forgotBtn?.addEventListener("click", handleForgotPassword);
 
   // 屏蔽列表
   els.unblockBtn.addEventListener("click", handleUnblock);
@@ -177,6 +179,24 @@ export function renderUpload(upload) {
 function setStatus(stage, text) {
   els.statusCard.dataset.stage = stage;
   els.statusText.textContent = text;
+}
+
+/**
+ * 忘记密码：在系统浏览器的新标签页中打开网页端的重置密码页面
+ *
+ * 客户端窗口内无法安全地承载"改密码"这类敏感表单，因此交给默认浏览器，
+ * 同时把当前填写的服务器地址与邮箱带过去，省去用户重复输入。
+ */
+async function handleForgotPassword() {
+  const serverUrl = els.server.value.trim() || els.server.placeholder || "http://localhost:8080";
+  const email = els.email.value.trim();
+
+  const result = await api.openForgotPassword(serverUrl, email);
+  if (result?.ok) {
+    showToast("已在浏览器中打开「忘记密码」页面", "success", 2600);
+  } else {
+    showToast(result?.message || "打开「忘记密码」页面失败", "error", 3200);
+  }
 }
 
 /**

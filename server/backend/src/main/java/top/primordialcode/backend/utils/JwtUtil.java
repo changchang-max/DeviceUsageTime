@@ -41,13 +41,17 @@ public class JwtUtil {
      */
     public String generate(String user_email){
         log.info("生成jwt，用户邮箱为："+user_email);
+        long now = System.currentTimeMillis();
         String token = Jwts.builder()
                 //设置主题,一般以主键作为主题，因为唯一
                 .subject(user_email)
 
+                // 显式写入签发时间(秒级)，供"该时间点之前签发的Token全部失效"的吊销策略判断
+                .issuedAt(new Date((now / 1000L) * 1000L))
+
                 //设置过期时间
                 .expiration(new Date(
-                        System.currentTimeMillis()+EXPRIATION))
+                        now+EXPRIATION))
                 // 将Jwt签名。因为Jwt不是加密，而是签名
                 .signWith(SECRET_KEY)
                 // 编码生成最终数据
@@ -64,6 +68,7 @@ public class JwtUtil {
      */
     public String generateWithRole(String user_email, String role){
         log.info("生成jwt，用户邮箱为："+user_email+"，角色为："+role);
+        long now = System.currentTimeMillis();
         String token = Jwts.builder()
                 //设置主题,一般以主键作为主题，因为唯一
                 .subject(user_email)
@@ -71,9 +76,12 @@ public class JwtUtil {
                 //添加角色信息到claims中
                 .claim("role", role)
 
+                // 显式写入签发时间(秒级)，供"该时间点之前签发的Token全部失效"的吊销策略判断
+                .issuedAt(new Date((now / 1000L) * 1000L))
+
                 //设置过期时间
                 .expiration(new Date(
-                        System.currentTimeMillis()+EXPRIATION))
+                        now+EXPRIATION))
                 // 将Jwt签名。因为Jwt不是加密，而是签名
                 .signWith(SECRET_KEY)
                 // 编码生成最终数据
@@ -163,5 +171,23 @@ public class JwtUtil {
                 .getPayload();
         
         return claims.get("role", String.class);
+    }
+
+    /**
+     * 签发时间(毫秒时间戳)
+     * 兼容早期未显式写入 iat 的历史Token：缺失时按 0 处理，视为"很久以前签发"
+     *
+     * @param token jwtToken
+     * @return 签发时间(毫秒)，无 iat 时返回 0
+     */
+    public long getIssuedAt(String token) {
+        Claims claims = Jwts.parser()
+                .verifyWith(SECRET_KEY)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+
+        Date issuedAt = claims.getIssuedAt();
+        return issuedAt != null ? issuedAt.getTime() : 0L;
     }
 }

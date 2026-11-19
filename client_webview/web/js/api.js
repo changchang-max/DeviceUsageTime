@@ -226,6 +226,8 @@ async function mockCall(method, ...args) {
     case "logout":
       mockState.loggedIn = false;
       return respond({ ok: true, message: "已退出登录，停止上传数据" });
+    case "open_forgot_password":
+      return respond({ ok: true, url: `${args[0] || "http://localhost:8080"}/forgot-password` });
     case "set_auto_startup":
       mockState.autoStartup = Boolean(args[0]);
       return respond({ ok: true, enabled: mockState.autoStartup, message: "mock 模式仅演示状态" });
@@ -297,6 +299,7 @@ export const api = {
   getBlockedList: () => call("get_blocked_list"),
   login: (serverUrl, email, password) => call("login", serverUrl, email, password),
   logout: () => call("logout"),
+  openForgotPassword: (serverUrl, email) => call("open_forgot_password", serverUrl, email),
   setAutoStartup: (enabled) => call("set_auto_startup", enabled),
   listHistory: () => call("list_history"),
   loadHistory: (file) => call("load_history", file),

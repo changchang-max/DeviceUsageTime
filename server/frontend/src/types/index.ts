@@ -40,6 +40,20 @@ export interface DeregisterRequest {
   user_password: string
 }
 
+// 忘记密码：发送验证码返回数据(后端 ForgotPasswordCodeVO)
+export interface ForgotPasswordCodeData {
+  user_email: string
+  /** 验证码有效期(秒) */
+  expires_in: number
+}
+
+// 忘记密码：重置密码请求体(字段名与后端 ForgotPasswordDTO 保持一致)
+export interface ForgotPasswordRequest {
+  user_email: string
+  code: string
+  new_password: string
+}
+
 // 秘钥验证返回数据(后端 VerifyKeyVO)
 export interface VerifyKeyData {
   userName: string

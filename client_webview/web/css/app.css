@@ -1373,6 +1373,31 @@ thead th {
   color: var(--text-soft);
 }
 
+/* 字段标签行：左侧标签 + 右侧文字按钮（如"忘记密码？"） */
+.field-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.field-link {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 12.5px;
+  font-family: inherit;
+  font-weight: 500;
+  color: var(--accent);
+  cursor: pointer;
+  transition: color 0.16s var(--ease), opacity 0.16s var(--ease);
+}
+
+.field-link:hover {
+  opacity: 0.82;
+  text-decoration: underline;
+}
+
 .field input {
   height: 38px;
   padding: 0 12px;

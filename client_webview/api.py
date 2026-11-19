@@ -13,6 +13,8 @@ import logging
 import os
 import threading
 import time
+import urllib.parse
+import webbrowser
 
 import mytools
 import network
@@ -324,6 +326,33 @@ class WebApi:
             self._logout_in_progress = False
 
         return {"ok": True, "message": "已退出登录，停止上传数据"}
+
+    def open_forgot_password(self, server_url: str, user_email: str = "") -> dict:
+        """在系统默认浏览器的新标签页中打开网页端的「忘记密码」页面
+
+        客户端窗口内不适合承载重置密码这类敏感表单，统一交给浏览器处理；
+        当前填写的服务器地址与邮箱会作为参数带过去，减少重复输入。
+
+        参数:
+            server_url: 后端地址，如 http://localhost:8080
+            user_email: 当前填写的邮箱，可为空
+        返回:
+            dict: {"ok": bool, "url": 实际打开的地址, "message": str}
+        """
+        server_url = (server_url or "").strip().rstrip("/") or network.DEFAULT_BASE_URL
+        user_email = (user_email or "").strip()
+
+        target = f"{server_url}/forgot-password"
+        if user_email:
+            target = f"{target}?email={urllib.parse.quote(user_email)}"
+
+        try:
+            webbrowser.open_new_tab(target)
+            logging.info(f"已在浏览器中打开忘记密码页面: {target}")
+            return {"ok": True, "url": target, "message": "已在浏览器中打开「忘记密码」页面"}
+        except Exception as e:
+            logging.error(f"打开忘记密码页面失败: {e}")
+            return {"ok": False, "url": target, "message": f"打开浏览器失败：{e}"}
 
     def set_auto_startup(self, enabled: bool) -> dict:
         """开启/关闭开机自启动

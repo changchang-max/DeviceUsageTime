@@ -1,46 +1,86 @@
 # ============================================
 # Nginx 配置模板
-# 容器启动时由 envsubst 替换 ${DOMAIN} 和 ${BACKEND_HOST}
+# 容器启动时由 envsubst 替换 ${DOMAIN} ${BACKEND_HOST} ${BACKEND_UPSTREAM}
 #
-# 默认值（通过 docker-compose.yml 设置）：
-#   DOMAIN       = primordialcode.xyz
-#   BACKEND_HOST = localhost:8080
+# 环境变量（docker-compose.yml 提供默认值）：
+#   DOMAIN           — Nginx server_name，留空表示匹配所有 Host（默认 _）
+#   BACKEND_HOST     — 反向代理目标，形如 backend:8080
+#   BACKEND_UPSTREAM — 后端主机名部分（不含端口），供 resolver 解析
 # ============================================
 
 server {
-    listen       80;
+    listen       80 default_server;
     server_name  ${DOMAIN};
+
+    # 静态资源上传大小（客户端批量上传历史数据可能较大）
+    client_max_body_size 20m;
 
     # Gzip 压缩
     gzip on;
-    gzip_types text/plain text/css application/json application/javascript text/xml application/xml text/javascript;
+    gzip_vary on;
+    gzip_comp_level 6;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml text/javascript image/svg+xml;
     gzip_min_length 1024;
 
-    # 前端静态资源
+    # ---------- 前端静态资源 ----------
     location / {
         root   /usr/share/nginx/html;
         index  index.html;
         try_files $uri $uri/ /index.html;  # SPA 路由回退
     }
 
-    # REST API 反向代理到后端
-    location /api {
-        proxy_pass http://${BACKEND_HOST};
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+    # index.html 不缓存，保证发版后立即生效
+    location = /index.html {
+        root                 /usr/share/nginx/html;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header Pragma "no-cache";
+        expires -1;
     }
 
-    # WebSocket 反向代理到后端
-    location /ws {
-        proxy_pass http://${BACKEND_HOST};
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    # Vite 产物带内容哈希，可长期强缓存
+    location /assets/ {
+        root                 /usr/share/nginx/html;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    # ---------- REST API 反向代理 ----------
+    location /api {
+        # 使用变量 + resolver 时，Nginx 会在运行时解析后端域名，
+        # 因此后端容器重建/换 IP 后无需重启前端容器即可自动恢复。
+        resolver 127.0.0.11 valid=10s ipv6=off;
+        set $backend_upstream ${BACKEND_UPSTREAM};
+
+        proxy_pass http://$backend_upstream:8080;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_connect_timeout 10s;
+        proxy_send_timeout    60s;
+        proxy_read_timeout    60s;
+    }
+
+    # ---------- WebSocket 反向代理 ----------
+    location /ws {
+        resolver 127.0.0.11 valid=10s ipv6=off;
+        set $backend_ws ${BACKEND_UPSTREAM};
+
+        proxy_pass http://$backend_ws:8080;
+
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host       $host;
+        proxy_set_header X-Real-IP  $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # 长连接保活：需大于后端 realtime.idle-timeout-seconds（默认 180s）
+        proxy_connect_timeout 10s;
+        proxy_send_timeout    3600s;
+        proxy_read_timeout    3600s;
+        proxy_buffering       off;
     }
 }

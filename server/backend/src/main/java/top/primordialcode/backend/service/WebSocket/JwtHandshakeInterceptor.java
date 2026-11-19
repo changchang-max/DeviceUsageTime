@@ -13,7 +13,10 @@ import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.server.HandshakeInterceptor;
 import top.primordialcode.backend.entity.UserAuthEntity;
 import top.primordialcode.backend.mapper.UserAuthMapper;
+import top.primordialcode.backend.service.Redis.RedisStringServer;
+import top.primordialcode.backend.utils.JwtRevocationUtil;
 import top.primordialcode.backend.utils.JwtUtil;
+import top.primordialcode.backend.utils.MaskUtil;
 import top.primordialcode.backend.vo.websocket.WsErrorMessage;
 
 import java.net.URLDecoder;
@@ -49,14 +52,53 @@ public class JwtHandshakeInterceptor
     private final JwtUtil jwtUtil;
     private final UserAuthMapper userAuthMapper;
     private final ObjectMapper objectMapper;
+    private final RedisStringServer redisStringServer;
 
     public JwtHandshakeInterceptor(
             JwtUtil jwtUtil,
             UserAuthMapper userAuthMapper,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            RedisStringServer redisStringServer) {
         this.jwtUtil = jwtUtil;
         this.userAuthMapper = userAuthMapper;
         this.objectMapper = objectMapper;
+        this.redisStringServer = redisStringServer;
+    }
+
+    /**
+     * 判断Token是否已被吊销(与 JwtAuthenticationFilter 采用同一套标记)
+     *
+     * @param token 原始Token
+     * @param email Token所属用户邮箱
+     * @return true：已被吊销
+     */
+    private boolean isRevoked(String token, String email) {
+        try {
+            if (redisStringServer.existKey("jwt:blacklist:" + token)) {
+                return true;
+            }
+            if (email == null || email.isBlank()) {
+                return false;
+            }
+            long issuedAt = jwtUtil.getIssuedAt(token);
+
+            String epoch = redisStringServer.get(JwtRevocationUtil.EPOCH_BLACKLIST_PREFIX + email);
+            if (epoch != null && !epoch.isBlank()) {
+                try {
+                    if (issuedAt <= Long.parseLong(epoch)) {
+                        return true;
+                    }
+                } catch (NumberFormatException e) {
+                    log.warn("全局失效时间点格式异常: token={}", token);
+                }
+            }
+            return redisStringServer.existKey(
+                    JwtRevocationUtil.EPOCH_BLACKLIST_PREFIX + issuedAt + ":" + email);
+        } catch (Exception e) {
+            // Redis 异常时放行，与 HTTP 鉴权链路的降级策略保持一致
+            log.warn("WebSocket握手凭证吊销校验异常，本次放行: error={}", e.getMessage());
+            return false;
+        }
     }
 
     /**
@@ -80,6 +122,12 @@ public class JwtHandshakeInterceptor
             try {
                 // 解析JWT，subject为用户邮箱(本系统中以邮箱作为全局唯一用户标识)
                 String email = jwtUtil.parse(token);
+
+                // 凭证吊销校验：密码重置/强制下线后，旧Token不能再建立实时连接
+                if (isRevoked(token, email)) {
+                    log.warn("WebSocket握手失败，Token已被吊销: {}", MaskUtil.maskEmail(email));
+                    return reject(response, 401, "Token已失效，请重新登录");
+                }
 
                 // 保存被授权查看的用户标识与认证方式
                 attributes.put(DeviceWebSocketHandler.ATTR_USER_ID, email);

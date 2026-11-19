@@ -48,6 +48,9 @@ public class SecurityConfig {
                                         "/api/auth/register",
                                         "/api/auth/sendCode",
                                         "/api/auth/verify-key",
+                                        // 忘记密码：获取重置验证码(3分钟有效)与凭验证码重置密码，均无需登录
+                                        "/api/auth/forgot-password/code",
+                                        "/api/auth/forgot-password/reset",
                                         // 修改密码接口同时支持已登录(Token认证)与未登录(请求体传user_email)两种场景，
                                         // 因此需放行匿名访问，是否携带Token由Controller/Service层自行判断
                                         "/api/auth/change-password",

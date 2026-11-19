@@ -93,4 +93,4 @@ management:
 # 启动期清理旧版本遗留的无日期 Redis key
 redis:
   legacy-cleanup:
-    enabled: true
+    enabled: ${REDIS_LEGACY_CLEANUP:true}

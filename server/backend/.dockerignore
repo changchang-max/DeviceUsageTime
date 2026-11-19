@@ -8,8 +8,11 @@ target/
 # 日志
 logs/
 
-# 敏感文件（通过 docker-compose 环境变量注入）
+# 敏感文件：注意 **不要** 忽略 src/main/resources/.env
+# 项目使用 spring-dotenv 从 classpath 根读取 .env 为 ${MYSQL_USER} 等占位符赋值，
+# 若在构建时排除会导致容器启动即失败。真实值由 docker compose 的环境变量覆盖。
 .env
+!.env.example
 
 # Git
 .git/

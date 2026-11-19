@@ -67,7 +67,12 @@
         </el-input>
       </el-form-item>
 
-      <el-form-item label="密码" prop="password">
+      <div class="password-row">
+        <span class="form-label">密码</span>
+        <button type="button" class="forgot-link" @click="openForgotPassword">忘记密码？</button>
+      </div>
+
+      <el-form-item prop="password">
         <el-input
           v-model="accountForm.password"
           type="password"
@@ -210,6 +215,23 @@ const handleLogin = async () => {
   }
 }
 
+// ---------- 忘记密码 ----------
+/**
+ * 在新标签页打开忘记密码页
+ * 已填写的邮箱通过查询参数带入，省去用户重复输入；
+ * 使用 rel="noopener" 语义（window.open 的第三个参数），避免新页面反向操作当前页
+ */
+const openForgotPassword = () => {
+  const email = accountForm.email.trim()
+  const query = email ? `?email=${encodeURIComponent(email)}` : ''
+  const target = `/forgot-password${query}`
+  const opened = window.open(target, '_blank', 'noopener')
+  // 被浏览器拦截弹窗时降级为当前页跳转，保证功能可用
+  if (!opened) {
+    router.push(target)
+  }
+}
+
 // ---------- 模式切换 ----------
 const switchMode = (next: Mode) => {
   mode.value = next
@@ -262,6 +284,35 @@ watch(mode, async () => {
 
 .foot-divider {
   color: var(--border-strong);
+}
+
+/* 密码标签行：左侧标签 + 右侧"忘记密码？"，与 Element 表单标签保持同字号 */
+.password-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: var(--space-2);
+}
+
+.form-label {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.forgot-link {
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: var(--text-sm);
+  color: var(--primary);
+  cursor: pointer;
+}
+
+.forgot-link:hover {
+  color: var(--primary-hover);
+  text-decoration: underline;
 }
 
 /* Element 表单标签：中文加粗一点，行距收紧 */

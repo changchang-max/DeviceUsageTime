@@ -3,6 +3,8 @@ import type {
   ApiResponse,
   ChangePasswordRequest,
   DeregisterRequest,
+  ForgotPasswordCodeData,
+  ForgotPasswordRequest,
   LoginRequest,
   RegisterRequest,
   VerifyKeyData
@@ -45,4 +47,16 @@ export const changePasswordApi = (data: ChangePasswordRequest) => {
 // 注销账号(永久删除当前账号及全部关联数据,不可恢复; 需输入登录密码二次确认)
 export const deregisterApi = (data: DeregisterRequest) => {
   return request.post<ApiResponse>('/auth/deregister', data)
+}
+
+// 忘记密码：获取重置验证码(发送到注册邮箱, 3分钟内有效且仅可使用一次)
+export const sendResetCodeApi = (email: string) => {
+  return request.get<ApiResponse<ForgotPasswordCodeData>>('/auth/forgot-password/code', {
+    params: { to: email }
+  })
+}
+
+// 忘记密码：凭验证码重置密码(成功后该账号所有已登录凭证立即失效, 需重新登录)
+export const resetPasswordApi = (data: ForgotPasswordRequest) => {
+  return request.post<ApiResponse>('/auth/forgot-password/reset', data)
 }
