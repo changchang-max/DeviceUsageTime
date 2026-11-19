@@ -88,7 +88,12 @@ management:
         include: health,info,metrics
   endpoint:
     health:
-      show-details: when-authorized
+      show-details: ${MANAGEMENT_HEALTH_SHOW_DETAILS:when-authorized}
+  health:
+    # 邮件健康检查会实际登录 SMTP，授权码错误/网络受限时会把整体状态变成 DOWN，
+    # 导致容器 HEALTHCHECK 与 depends_on 健康条件永远无法通过。生产默认不纳入健康判定。
+    mail:
+      enabled: ${MANAGEMENT_HEALTH_MAIL_ENABLED:false}
 
 # 启动期清理旧版本遗留的无日期 Redis key
 redis:
