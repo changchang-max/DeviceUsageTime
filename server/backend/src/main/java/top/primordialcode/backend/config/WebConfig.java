@@ -19,8 +19,18 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
 
-    /** 允许的跨域来源，逗号分隔；默认只放行本地开发端口 */
-    @Value("${cors.allowed-origins:http://localhost:3000,http://127.0.0.1:3000}")
+    /**
+     * 允许的跨域来源，逗号分隔。
+     *
+     * 默认留空 = 不注册任何 CORS 规则 = 完全不做过跨域校验。
+     * 这是生产环境的正确取值（Nginx 同域反代、Vite 开发也用 proxy 代理，两者都同源）。
+     *
+     * 注意：这里**不能**给一个 localhost 默认值。只要注册了 CORS 规则，
+     * 浏览器发出的带 Origin 的请求（同一页面里的 POST 也会带 Origin）就会走 CORS 校验，
+     * 来源不在白名单里时直接返回 403 "Invalid CORS request"，
+     * 表现为"注册/登录时提示无权限访问"，且 GET 正常、POST 失败，极难排查。
+     */
+    @Value("${cors.allowed-origins:}")
     private String allowedOrigins;
 
     /**
@@ -50,7 +60,8 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         if (allowedOrigins == null || allowedOrigins.isBlank()) {
-            // 生产环境不需要跨域(同域反代)
+            // 生产环境不需要跨域(同域反代)，不注册任何规则即可放行所有 Origin
+            log.info("CORS 未配置来源，已关闭跨域校验(同域部署推荐)");
             return;
         }
         String[] origins = allowedOrigins.split(",");

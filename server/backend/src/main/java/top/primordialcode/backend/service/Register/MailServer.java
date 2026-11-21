@@ -5,6 +5,7 @@ import jakarta.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -182,7 +183,17 @@ public class MailServer implements MailServerImpl {
                 </html>
                 """,true);
 
-        mailSender.send(message);
+        // 发送邮件。收件人不存在时 SMTP 服务端会拒收（如 QQ 邮箱返回 550），
+        // 这里单独捕获并转为 400，避免被全局兜底成"服务器内部错误"这种 500，
+        // 让用户能看懂到底是邮箱填错了还是服务端炸了。
+        try {
+            mailSender.send(message);
+        } catch (MailException e) {
+            log.warn("验证码邮件发送失败: to={}, error={}", to, e.getMessage());
+            // 发送失败时清掉刚写入的验证码，避免残留在 Redis 里 5 分钟内无法重发
+            verifyCodeServer.deletecode(to);
+            return Result.error(400, "验证码邮件发送失败，请确认邮箱地址是否正确", null);
+        }
 
         return Result.success();
     }

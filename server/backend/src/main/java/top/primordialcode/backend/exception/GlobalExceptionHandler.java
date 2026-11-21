@@ -119,6 +119,20 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 请求路径不存在（如多余的尾斜杠 /api/auth/register/）时返回 404，
+     * 避免被兜底处理器误报为 500。
+     *
+     * @param ex 资源未找到异常
+     * @return 统一错误响应
+     */
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public Result handleNoResourceFound(
+            org.springframework.web.servlet.resource.NoResourceFoundException ex) {
+        return Result.error(HttpStatus.NOT_FOUND.value(), "请求的资源不存在", null);
+    }
+
+    /**
      * 其他未捕获异常
      *
      * @param ex 异常

@@ -23,8 +23,11 @@ service.interceptors.request.use(
     )
 
     // 从localStorage获取token
+    // skipAuth 的匿名接口(登录/注册/找回密码)不携带Token：
+    // 后端 JwtAuthenticationFilter 只要收到 Authorization 头就会先校验，
+    // 一旦 Token 失效(过期/被吊销/格式异常)会直接返回401/403，不再走 permitAll 白名单
     const token = localStorage.getItem('token')
-    if (token && !useKeyAuth) {
+    if (token && !useKeyAuth && !(config as ExtendedConfig).skipAuth) {
       config.headers.Authorization = `Bearer ${token}`
     }
     return config
@@ -37,9 +40,12 @@ service.interceptors.request.use(
 /**
  * 扩展请求配置
  * - ignore404: 业务码 404(如"该日期无数据")不作为错误提示，原样返回给调用方自行处理
+ * - skipAuth: 不附加 Authorization 头。用于登录/注册/找回密码等匿名接口，
+ *   避免 localStorage 里的失效 token 被带上，导致后端 JWT 过滤器直接返回 401/403
  */
 interface ExtendedConfig extends InternalAxiosRequestConfig {
   ignore404?: boolean
+  skipAuth?: boolean
 }
 
 // 响应拦截器: 直接返回ApiResponse对象(而不是AxiosResponse)
@@ -115,10 +121,14 @@ service.interceptors.response.use(
  * 从而 res.data 直接是业务数据类型。
  */
 const request = {
-  get<T = unknown>(url: string, config?: AxiosRequestConfig & { ignore404?: boolean }): Promise<T> {
+  get<T = unknown>(url: string, config?: AxiosRequestConfig & { ignore404?: boolean; skipAuth?: boolean }): Promise<T> {
     return service.get(url, config as AxiosRequestConfig) as unknown as Promise<T>
   },
-  post<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig & { ignore404?: boolean }): Promise<T> {
+  post<T = unknown>(
+    url: string,
+    data?: unknown,
+    config?: AxiosRequestConfig & { ignore404?: boolean; skipAuth?: boolean }
+  ): Promise<T> {
     return service.post(url, data, config as AxiosRequestConfig) as unknown as Promise<T>
   }
 }

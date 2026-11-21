@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -18,6 +19,7 @@ import top.primordialcode.backend.utils.JwtRevocationUtil;
 import top.primordialcode.backend.utils.JwtUtil;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 
@@ -30,6 +32,20 @@ import java.util.List;
 @Slf4j
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
+    /**
+     * 匿名接口白名单，与 SecurityConfig 的 permitAll 保持一致。
+     * 浏览器残留失效 Token 时，这些接口若被 JWT 过滤器拦截会直接返回 401/403，
+     * 表现为用户点击"登录/注册/找回密码"时提示"无权限访问"。
+     */
+    private static final List<String> PUBLIC_PATHS = List.of(
+            "/api/auth/login",
+            "/api/auth/register",
+            "/api/auth/sendCode",
+            "/api/auth/verify-key",
+            "/api/auth/forgot-password/code",
+            "/api/auth/forgot-password/reset",
+            "/api/auth/change-password"
+    );
 
     private final JwtUtil jwtUtil;
 
@@ -64,7 +80,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             // 黑名单命中(已退出登录)直接 401
             if (redisStringServer.existKey("jwt:blacklist:" + token)) {
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                rejectOrPass(request, response, filterChain);
                 return;
             }
 
@@ -75,7 +91,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 // 凭证吊销校验：密码重置/强制下线后，该时间点之前签发的Token一律拒绝
                 if (isRevoked(token, email)) {
                     log.debug("JWT已被吊销: subject={}", email);
-                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    rejectOrPass(request, response, filterChain);
                     return;
                 }
 
@@ -91,15 +107,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         authentication.getPrincipal(), authentication.getAuthorities());
             } catch (ExpiredJwtException e) {
                 log.debug("JWT token已过期: {}", e.getMessage());
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                rejectOrPass(request, response, filterChain);
                 return;
             } catch (JwtException e) {
                 log.debug("JWT token验证失败: {}", e.getMessage());
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                rejectOrPass(request, response, filterChain);
                 return;
             } catch (Exception e) {
                 log.error("JWT鉴权未知异常", e);
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                rejectOrPass(request, response, filterChain);
                 return;
             }
         }
@@ -150,5 +166,69 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             log.warn("凭证吊销校验异常，本次放行: error={}", e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * Token 无效时的统一出口：匿名接口放行（交由 permitAll 规则处理），
+     * 受保护接口返回 401。
+     *
+     * 无论哪种分支都保持 JSON 错误体，避免前端拿到无响应体的 401 时无法展示原因。
+     *
+     * @param request     当前请求
+     * @param response    当前响应
+     * @param filterChain 剩余过滤器链
+     */
+    private void rejectOrPass(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain
+    ) throws ServletException, IOException {
+        // 无论走哪条分支都清空上下文，防止匿名接口被上一步残留的认证信息污染
+        SecurityContextHolder.clearContext();
+        if (isPublicPath(request)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+        log.debug("JWT校验失败，拒绝访问: {} {}", request.getMethod(), request.getRequestURI());
+        writeJsonError(response, HttpServletResponse.SC_UNAUTHORIZED,
+                "未授权,令牌无效或已过期,请重新登录");
+    }
+
+    /**
+     * 输出与项目 Result 结构一致的 JSON 错误响应
+     *
+     * @param response HTTP 响应
+     * @param status   HTTP 状态码
+     * @param message  提示信息
+     */
+    private void writeJsonError(HttpServletResponse response, int status, String message)
+            throws IOException {
+        if (response.isCommitted()) {
+            return;
+        }
+        response.setStatus(status);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        String body = "{\"code\":" + status
+                + ",\"message\":\"" + message + "\",\"data\":null}";
+        response.getWriter().write(body);
+    }
+
+    /**
+     * 判断请求是否指向匿名接口
+     *
+     * @param request 当前请求
+     * @return true 表示属于匿名接口（容忍结尾斜杠）
+     */
+    private boolean isPublicPath(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        String ctx = request.getContextPath();
+        if (ctx != null && !ctx.isEmpty() && path.startsWith(ctx)) {
+            path = path.substring(ctx.length());
+        }
+        if (path.length() > 1 && path.endsWith("/")) {
+            path = path.substring(0, path.length() - 1);
+        }
+        return PUBLIC_PATHS.contains(path);
     }
 }

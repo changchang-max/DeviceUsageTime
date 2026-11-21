@@ -44,13 +44,22 @@ server {
     }
 
     # ---------- REST API 反向代理 ----------
-    location /api {
+    # 使用 ~* 大小写不敏感前缀匹配：前端 baseURL 是 /api，但客户端/旧版本代码里出现过
+    # /API、/Auth/register 这类大小写不一致的写法，一旦没命中这里就会落到 location /
+    # 被 SPA 回退成 index.html 或直接 403，表现为"注册时无权限访问"。
+    location ~* ^/api(/|$) {
         # 使用变量 + resolver 时，Nginx 会在运行时解析后端域名，
         # 因此后端容器重建/换 IP 后无需重启前端容器即可自动恢复。
+        #
+        # 注意：宿主机若被 Tailscale 等工具接管了 /etc/resolv.conf，
+        # 容器里会带上 "search xxx.ts.net" + "ndots:0"，Docker 内建 DNS 会把
+        # 短名 dut-backend 拼成 dut-backend.xxx.ts.net 去查 → NXDOMAIN，
+        # nginx 报 "dut-backend could not be resolved (2: Server failure)" → 502/403。
+        # 解决：proxy_pass 里给主机名补上结尾的点，强制按 FQDN 解析，不再追加搜索域。
         resolver 127.0.0.11 valid=10s ipv6=off;
         set $backend_upstream ${BACKEND_UPSTREAM};
 
-        proxy_pass http://$backend_upstream:8080;
+        proxy_pass http://$backend_upstream.:8080;
 
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;
@@ -60,6 +69,17 @@ server {
         proxy_connect_timeout 10s;
         proxy_send_timeout    60s;
         proxy_read_timeout    60s;
+
+        # 解析失败时给出可读的 JSON，而不是裸 502（前端 502 分支只会提示"请求失败"）
+        proxy_intercept_errors on;
+        error_page 502 503 504 = @backend_unavailable;
+    }
+
+    # 后端不可达时的统一 JSON 出口
+    location @backend_unavailable {
+        internal;
+        add_header Content-Type "application/json; charset=utf-8" always;
+        return 503 '{"code":503,"message":"后端服务暂时不可用，请稍后重试","data":null}';
     }
 
     # ---------- WebSocket 反向代理 ----------
@@ -67,7 +87,7 @@ server {
         resolver 127.0.0.11 valid=10s ipv6=off;
         set $backend_ws ${BACKEND_UPSTREAM};
 
-        proxy_pass http://$backend_ws:8080;
+        proxy_pass http://$backend_ws.:8080;
 
         proxy_http_version 1.1;
         proxy_set_header Upgrade    $http_upgrade;
